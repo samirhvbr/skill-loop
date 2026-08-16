@@ -1,0 +1,37 @@
+# ── SO ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Ambiente / segredos (NUNCA versionar) ───────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.p8
+*.pfx
+
+# ── Trabalho local ──────────────────────────────────────────────────
+tmp/
+*.zip
+CLAUDE.local.md
+.claude/settings.local.json
+
+# ── Mensagens reais que calibraram o classificador (T-07) ───────────
+# Os fixtures publicados em tests/fixtures/ são a versão ANONIMIZADA delas.
+# Os originais carregam nomes de classe, tabela, constraint e itens de roadmap
+# do sistema do Samir — repositório público, histórico permanente.
+fixtures-reais/
+
+# ── Estado do próprio loop (T-07) ───────────────────────────────────
+# Aqui o .loop/ é fixture de desenvolvimento, não registro de trabalho real.
+# No repositório ALVO a decisão é outra e está aberta (P-01): versionar dá
+# auditoria durável e arrisca segredo ecoado no histórico permanente.
+.loop/
+
+# ── Python ──────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+.venv/

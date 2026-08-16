@@ -1,0 +1,17 @@
+2.4.1 na master. O erro que a fitness me pegou de manhã merecia a pergunta seguinte: quantas outras estão assim? Varri as migrações dos dez schemas — sobrava uma, o hash_do_convite.
+
+E ela é load-bearing: é o que faz o token do convite ser de uso único, que a ✦C registra como o único caminho de entrega de credencial hoje. A garantia mais sensível da identidade estava com nome dado pelo Postgres (convite_hash_key), invisível a qualquer outro código. V004_unicidade_nomeada: mesma coluna, mesma unicidade, mesmo índice — e agora dá para garantir passar ser dizível, e portanto citável como prova.
+
+Terceira vez que a casa faz esse movimento (V002 do módulo de cobrança, V003 do módulo de pedidos, os dois V004 de hoje), então a cerca entrou no mesmo commit em vez de esperar a quarta:
+
+GuardaDoSchema#nenhumaUnicidadeDeNegocioTemNomeGeradoPeloBanco
+
+PK fica fora de propósito — <table>_pkey é convenção universal e ninguém a cita como prova; o alvo é a unicidade que carrega regra ("um documento por grupo", "um token por convite").
+
+O detector é exercitado no motor, não em Java: afirmar endsWith testaria o Java, e a consulta usa LIKE '%\_key' com escape — sem o \_, o padrão casaria qualquer caractere antes de "key" e passaria a acusar constraint nomeada à mão. Os quatro casos sintéticos incluem as duas anônimas reais de hoje como regressão.
+
+433 testes · 432 ok · 0 falhas · 0 erro de lint.
+
+Sete commits hoje, e o fio foi um só: afirmação que ninguém recorre apodrece. O saldo — uma ✦ retirada por medição, cinco justificativas corrigidas, uma recomendação minha retirada antes de virar ruído, duas classes de observação completamente convertidas de comentário em consulta ao banco, e duas garantias que passaram a ter nome.
+
+Daqui pra frente, o que sobra de maior valor está do teu lado da mesa: a convenção do default no OpenAPI (140 operações sem ramo de erro), a ✦A (recibo × reivindicação em 18 sítios), a ✦B corrigida (coluna versao na Etapa e no Intervalo) e as respostas X1–Y2 do canal de voz.

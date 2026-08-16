@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "_comment_perfil": "PERFIL OPUS-ONLY — Opus 5 em tudo, janela 1M explicita via sufixo [1m] no model. NAO adicionar CLAUDE_CODE_DISABLE_1M_CONTEXT aqui: e ela que derruba a janela pra 200K. effortLevel maximo aceito em arquivo e 'xhigh'; 'max' so por sessao (/effort max ou CLAUDE_CODE_EFFORT_LEVEL=max no env).",
+  "model": "opus[1m]",
+  "effortLevel": "xhigh",
+  "env": {
+    "CLAUDE_CODE_SUBAGENT_MODEL": "opus",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-5"
+  },
+  "permissions": {
+    "_comment": "Permissoes do projeto - LOOP. Nucleo em Python 3 sem dependencia externa. Allow-list enxuta: git, testes, compilacao e o dry-run do instalador. O install.sh sem --dry-run escreve no ~/.claude/settings.json GLOBAL e por isso fica em ask.",
+    "defaultMode": "plan",
+    "allow": [
+      "Read",
+      "Edit",
+      "Write",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git pull:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(python3 -m unittest:*)",
+      "Bash(python3 -m py_compile:*)",
+      "Bash(python3 -m json.tool:*)",
+      "Bash(python3 skill/loop/loop_ctl.py:*)",
+      "Bash(./install.sh --dry-run:*)",
+      "Bash(shellcheck:*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./**/*.pem)",
+      "Read(./**/*.key)",
+      "Read(./**/*.p8)",
+      "Read(./**/*.p12)",
+      "Read(./**/*.pfx)",
+      "Read(./**/id_rsa*)",
+      "Read(./**/auth.json)",
+      "Bash(rm -rf:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push * --force*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git clean -fd:*)",
+      "Bash(git filter-branch:*)",
+      "Bash(git filter-repo:*)",
+      "Bash(curl * | sh:*)",
+      "Bash(curl * | bash:*)",
+      "Bash(wget * | sh:*)",
+      "Bash(wget * | bash:*)"
+    ],
+    "ask": [
+      "Bash(sudo:*)",
+      "Bash(crontab:*)",
+      "Bash(systemctl:*)",
+      "Bash(./install.sh:*)",
+      "Bash(pip install:*)",
+      "Bash(pip3 install:*)",
+      "Bash(npm install:*)",
+      "Bash(gh repo create:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh issue create:*)"
+    ]
+  },
+  "_comment_hooks": "Este projeto NAO instala hook proprio no .claude/ local. O produto e um hook Stop GLOBAL, instalado por ./install.sh no ~/.claude/settings.json. Testar o hook alterando o settings.json real e proibido (CLAUDE.md): use CLAUDE_SETTINGS e CLAUDE_SKILLS_DIR apontando para diretorio temporario."
+}

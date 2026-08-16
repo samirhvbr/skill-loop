@@ -1,0 +1,5 @@
+# Opt-in do COMMITTER neste repositório (ADR-004 de lá).
+# A presença deste arquivo é o opt-in; as chaves só RESTRINGEM (SPEC.md do COMMITTER §2).
+enabled: true
+push: true
+branch_only: master

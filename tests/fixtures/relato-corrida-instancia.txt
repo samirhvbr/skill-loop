@@ -1,0 +1,17 @@
+2.4.2 na master — e este é um defeito consertado, não uma medição.
+
+Na entrada (3) de hoje eu declarei um vão: sobre as cinco transições de Pedidos/Catálogo absolvidas por "máquina de estados", escrevi que "esta auditoria conferiu só o RETRY". Fui fechá-lo, e ele entregou o terceiro irmão de um defeito que a casa já pagou duas vezes: o Pedido na 2.1.9, o Produto em 09/08, e ninguém foi cobrar na InstanciaDeRecurso.
+
+A guarda do agregado protege o retry — a segunda chamada sequencial encontra `suspenso` e leva `ESTADO_INVALIDO`. Ela não protege a corrida: duas chamadas concorrentes leem `ativo` as duas, passam as duas, e o `salvarRecurso` era `upsert` incondicional.
+
+Aqui o preço era maior que nos dois irmãos, e é o que torna o achado específico: a instância grava trilha a cada transição. A corrida deixava duas linhas forenses afirmando a mesma passagem, além dos dois fatos que o consumidor a jusante lê. Trilha que conta duas vezes o que aconteceu uma é pior que trilha ausente — a ausente ninguém usa como prova.
+
+Consertado pelo padrão que a ✦D já recomenda como o da casa: gravação condicionada ao estado lido, sem tocar em pedido aprovado. As três transições da borda devolvem `ESTADO_CONCORRENTE` (409), código que o pacote já declarava.
+
+E uma distinção que o padrão dos irmãos não tinha: a cascata do pedido cede em silêncio. Ela roda dentro da transação do fato do pedido, e lançar 409 ali faria a suspensão do pedido inteiro rolar para trás porque a régua suspendia uma instância no mesmo instante — punindo o ato certo pelo ato certo do vizinho. A cascata não precisa vencer; precisa que aconteça.
+
+A prova monta a linha à mão de propósito — o que se afirma é a janela entre leitura e gravação, e subir pedido/oferta/proposta testaria a jornada, que os cenários já cobrem. Nos dois sentidos: vencedor grava 1, perdedor 0, e partindo do estado certo a operação seguinte passa (condicionar não é travar).
+
+SPEC-pedidos **1.3.4** (errata: a prosa do código passa a dizer que ele cobre pedido e instância). **435 testes · 434 ok · 0 falhas.**
+
+**Declarado e não feito:** os dois irmãos mais velhos seguem sem teste para a guarda deles — foram provados na bancada em 09/08 e nunca viraram catraca. Não os cobri hoje para não misturar dois trabalhos num commit; fica nomeado em vez de subentendido, e é o candidato natural para a próxima rodada.
