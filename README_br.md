@@ -92,7 +92,9 @@ nomeava o próximo trabalho, e um classificador só de perguntas a perderia inte
    subagente e é descartado — sem isso, todo turno com `Explore` viraria ASK).
 4. Classifica ASK × DOC.
 5. Arquiva `.loop/entries/NNNN-{ASK,DOC}-slug.md` + linha no `INDEX.md`.
-6. Colhe itens do fecho e pendências declaradas para o `QUEUE.md`, sem duplicar.
+6. Colhe itens do fecho e pendências declaradas para o `QUEUE.md`, sem duplicar
+   — e **nunca a pergunta**: ela já tem entry, índice e premissa, e na fila
+   viraria uma linha marcável como feita.
 7. Guarda-corpos (abaixo). Nenhum disparou → `decision: block` com o próximo
    item nomeado.
 8. Disparou → escreve `STATUS.md` e manda o agente enviar **uma push
@@ -193,10 +195,12 @@ loop-ctl porque               # parou e não continuou? este responde por quê
   Agora  → item 3 — o próximo da fila
 
   Fim por
+    kill-switch                    ausente
+    iterações 40                   restam 33
+    sem progresso                  1/3 parada(s)
+    fila zerada                    2 pendente(s)
     janela 05:00-22:00             fecha em 25min  ← primeira
     relógio 6h00                   resta 6h00
-    fila zerada                    2 pendente(s)
-    sem progresso 1/3 · kill-switch ausente
 
   Últimas paradas
     #7     DOC  relato    continuou   21:43  ⚠ fecho parcial
@@ -208,6 +212,13 @@ loop-ctl porque               # parou e não continuou? este responde por quê
 
 O `watch -n 30 status` repinta a mesma tela; isto responde **andou?** e
 **quanto falta?** — as duas perguntas de quem não está olhando.
+
+O bloco **Fim por** vem na ordem em que o hook testa, não na do relógio, e a
+marca responde a pergunta certa das três: `← encerrou aqui` numa rodada já morta
+(o motivo é fato gravado), `← já bateu: a próxima parada encerra` quando a rodada
+está viva mas alguma condição já é verdadeira, e `← primeira` — a que chega antes
+no relógio — só quando nenhuma bateu ainda. Ordenar por tempo restante só decide
+entre as que **não** bateram; qual delas manda é a cadeia que decide.
 
 Com o loop parado, o painel avisa que o **hook está inerte**: digitar "continua"
 no chat não reativa nada. `loop-ctl porque` diz qual portão barrou — hook
@@ -241,7 +252,7 @@ Revisar `ASSUMPTIONS.md` não é opcional — é o preço de não ter sido inter
   68 minutos. Ela sozinha já revelou um defeito silencioso — o hook lia o
   transcript antes de o fecho do turno chegar lá, e arquivava fragmento no lugar
   do relatório (ADR-012). Quantos outros defeitos as próximas rodadas escondem,
-  ninguém sabe: 155 testes não substituem operação.
+  ninguém sabe: 171 testes não substituem operação.
 - **A fila é escrita por um modelo** a partir da documentação. Fila ruim = loop
   ruim, e isso não é detectável pelo hook.
 - **`.loop/entries/` guarda a mensagem inteira do agente.** Se ele ecoar segredo

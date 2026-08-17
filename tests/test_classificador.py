@@ -218,6 +218,72 @@ class TestColheita(unittest.TestCase):
         self.assertEqual(r.itens, [])
 
 
+class TestAPerguntaNaoEItem(unittest.TestCase):
+    """Emenda ao ADR-005: colher segue independente do veredito; o que muda é
+    **o quê** se colhe. Pergunta não é trabalho declarado pendente."""
+
+    def test_pergunta_do_fecho_nao_vira_item(self):
+        # O caso real do EOP (17/08): `\\bsigo (?:com|por|para|pra)\\b` é HANDOFF,
+        # o parágrafo tem `:`, e o `rsplit(':')` da colheita transformou a
+        # própria pergunta em item — com o `**` do negrito partido na frente.
+        # Ela foi marcada `- [x]`, zerou a fila e encerrou a rodada.
+        # Mutação: desligar `_sem_as_perguntas` e o item volta.
+        r = c.classificar(
+            "Fechei o discriminador e os 12 testes passam.\n\n"
+            "**Pergunta:** sigo com esse discriminador, ou você quer a guarda "
+            "de fato-sem-listener mesmo assim?")
+        self.assertEqual(r.kind, "ASK")
+        self.assertEqual(len(r.perguntas), 1)
+        self.assertEqual(r.itens, [])
+
+    def test_pergunta_nao_engole_o_trabalho_declarado_ao_lado(self):
+        # O filtro tira a pergunta, não a colheita: o que é item continua item.
+        r = c.classificar(
+            "Fechei o parser.\n\n"
+            "Ficou para a próxima rodada:\n"
+            "- cobrir o Contrato com teste de guarda\n"
+            "- revisar o timeout do retry\n\n"
+            "**Pergunta:** sigo com esse discriminador, ou prefere a guarda?")
+        self.assertEqual(r.kind, "ASK")
+        self.assertEqual(len(r.itens), 2)
+        self.assertTrue(any("teste de guarda" in i for i in r.itens))
+        self.assertFalse(any("sigo com esse discriminador" in i for i in r.itens))
+
+    def test_retorica_tambem_nao_vira_item(self):
+        # Retórica é pergunta que o próprio texto responde. Mandá-la para a fila
+        # seria pedir ao agente que refizesse o que ele acabou de concluir.
+        r = c.classificar(
+            "Por que o índice não entrou? Porque a tabela ainda não existe — "
+            "criei a migração antes e o índice foi junto.\n\n"
+            "Fica do teu lado: aprovar o schema novo.")
+        self.assertEqual(r.kind, "ASK")
+        self.assertFalse(any("por que o indice" in c._norm(i) for i in r.itens))
+        self.assertTrue(any("aprovar o schema" in i for i in r.itens))
+
+    def test_colheita_segue_valendo_para_doc(self):
+        # ADR-005 intacto: o filtro roda nos dois vereditos, não só em ASK.
+        r = c.classificar(
+            "Entreguei a fase 2, 90 testes ok.\n\n"
+            "Ficou de fora o retry do webhook, que depende do contrato novo.")
+        self.assertEqual(r.kind, "DOC")
+        self.assertEqual(len(r.itens), 1)
+
+    def test_item_curto_passa_em_vez_de_sumir(self):
+        # Contenção com alvo curto acha qualquer coisa dentro de pergunta longa.
+        # Errar colhendo a mais deixa uma linha extra na fila; errar colhendo a
+        # menos apaga trabalho declarado — e só o segundo é silencioso.
+        self.assertFalse(c._e_a_pergunta("subir", ["subir o índice agora?"]))
+
+    def test_marcacao_solta_nao_entra_na_fila(self):
+        # `**Pendente:** rodar o lint` deixava `** rodar o lint` na fila.
+        r = c.classificar(
+            "Fechei o parser.\n\n"
+            "**Fica do teu lado:** revisar o contrato do webhook")
+        self.assertEqual(r.kind, "ASK")
+        self.assertEqual(len(r.itens), 1)
+        self.assertFalse(r.itens[0].startswith("*"))
+
+
 class TestZonaDeFecho(unittest.TestCase):
 
     def test_mensagem_de_um_paragrafo_e_toda_fecho(self):

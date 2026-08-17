@@ -51,10 +51,10 @@ O que **existe e roda** (`0.1.0`, 16/08/2026):
   condições de fim em **uma** cópia (o hook consome ela) — ADR-013.
 - `skill/loop/loop_watch.py` — acompanhamento de longe (delta + tempo restante).
 - `install.sh` — hook global idempotente, `--dry-run`, `--uninstall`.
-- **155 testes**, controles verificados por mutação.
+- **171 testes**, controles verificados por mutação.
 
 ```bash
-python3 -m unittest discover -s tests -v      # 155 testes, sem modelo, sem rede
+python3 -m unittest discover -s tests -v      # 171 testes, sem modelo, sem rede
 ./install.sh --dry-run                        # mostra o que faria
 loop-watch --uma-vez --raiz <repo>            # uma leitura do acompanhamento
 ```
@@ -101,7 +101,9 @@ mensagens vagas.
    `continuar-exceto-irreversivel` são configuração, não default (ADR-003).
 4. Classificação por **zona e direção**, não por pontuação; supressão de retórica
    é propriedade da frase (ADR-004).
-5. Colheita de itens é **independente do veredito** ASK/DOC (ADR-005).
+5. Colheita de itens é **independente do veredito** ASK/DOC — e a **pergunta
+   detectada nunca vira item de fila**, nos dois vereditos (ADR-005 + emenda de
+   17/08: um `- [x]` numa pergunta zera a fila e encerra a rodada).
 6. `QUEUE.md` é a fonte do próximo passo — não a todo list nativa (ADR-006).
 7. Hook global, opt-in por `.loop/`, em grupo próprio no `settings.json`
    (ADR-007).
@@ -112,9 +114,13 @@ mensagens vagas.
 10. Condições de fim combináveis: escopo por itens, por marcador, janela de
     horário, relógio (ADR-010).
 11. A cadeia de condições de fim tem **uma** cópia (`lib/diagnostico.py`, o hook
-    consome); os portões de inércia são espelho, provado por teste emparelhado
-    contra o hook. `loop-ctl porque` é a resposta a "por que não continuou?"
-    (ADR-013).
+    consome) — e quem só **exibe** (`porque`, `loop-watch`) pergunta a ela, ordem
+    inclusive: painel não opina sobre qual condição manda. Os portões de inércia
+    são espelho, provado por teste emparelhado contra o hook. `loop-ctl porque` é
+    a resposta a "por que não continuou?" (ADR-013 + emenda de 17/08).
+12. `objetivo` é **reportado, nunca executado**: recusado por `armar` e
+    substituído na exibição pela mesma régua (`estado.objetivo_legivel`). O
+    número de uma parada vem do **nome do arquivo**, nunca da iteração.
 
 E o que o LOOP **nunca** faz: agir sem `.loop/` armado, criar `.loop/` sozinho,
 apagar ou reescrever `ASSUMPTIONS.md`, escrever fora de `.loop/`, chamar rede ou

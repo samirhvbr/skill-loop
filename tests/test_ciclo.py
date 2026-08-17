@@ -385,6 +385,20 @@ class TestCondicoesDeFim(Base):
         _, saida = self.rodar(DOC)
         self.assertNotIn("ENCERROU", saida["reason"])
 
+    def test_estado_guarda_o_detalhe_do_encerramento(self):
+        # O detalhe morava só no STATUS.md, em prosa. Ele é o que separa duas
+        # condições que dividem o mesmo motivo ("escopo concluído" por N itens ×
+        # por marcador) — sem ele, quem lê o estado sabe QUE acabou e não sabe
+        # POR QUAL das duas. Mutação: parar de gravar e o painel volta a marcar
+        # a linha errada quando as duas condições estão armadas juntas.
+        self.armar(escopo_itens=1)
+        with open(self.loop.p("QUEUE.md"), "w", encoding="utf-8") as f:
+            f.write(FILA.replace("- [ ] 3.1", "- [x] 3.1"))
+        self.rodar(DOC)
+        st = self.loop.ler()
+        self.assertEqual(st["encerrado_por"], "escopo concluído")
+        self.assertIn("fechados nesta rodada", st["encerrado_detalhe"])
+
     def test_escopo_por_marcador(self):
         self.armar(escopo_ate="Nomear a unicidade do token")
         _, s1 = self.rodar(DOC)

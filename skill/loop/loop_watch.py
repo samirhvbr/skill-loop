@@ -26,9 +26,10 @@ import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "lib"))
 
-from diagnostico import curto                             # noqa: E402
-from estado import (Loop, achar_raiz, fora_da_janela,      # noqa: E402
-                    minutos_ate_fechar, minutos_desde)
+from diagnostico import condicoes_de_fim, curto           # noqa: E402
+from estado import (NUM_DE_ENTRY, Loop, achar_raiz,        # noqa: E402
+                    minutos_ate_fechar, minutos_desde,
+                    objetivo_para_exibir)
 
 # ── cor ─────────────────────────────────────────────────────────────────────
 class C(object):
@@ -86,38 +87,102 @@ def ultimas_paradas(loop, quantas=4):
                         dados[m.group(1)] = m.group(2).strip().strip('"')
         except (IOError, OSError):
             continue
+        # O nome do arquivo vence o campo `n:` do front-matter — depois de lê-lo,
+        # de propósito. Até 17/08 o hook gravava `n = iteracao + 1`, e `iniciar()`
+        # zera a iteração a cada rodada: as entries de ontem e as de hoje trazem
+        # réguas diferentes dentro de si. O painel mostrou `#4 #1 #2 #1` para
+        # quatro paradas que no disco são 0001..0004. Front-matter é o que o
+        # escritor achou na hora; o nome do arquivo é o que sobrevive à rodada.
+        num = NUM_DE_ENTRY.match(nome)
+        if num:
+            dados["n"] = str(int(num.group(1)))
         out.append(dados)
     return out
 
 
 # ── render ──────────────────────────────────────────────────────────────────
-def condicoes(st, pendentes, feitos):
-    """[(rótulo, restante_legível, minutos_para_bater_ou_None)] — ordenadas
-    pela que bate primeiro. `None` em minutos = não é medida em tempo."""
+def condicoes(loop, st, pendentes, feitos):
+    """`[(motivo, rótulo, restante, minutos_ou_None)]` na ordem em que o hook testa.
+
+    A ordem é a de `diagnostico.condicoes_de_fim` — kill-switch primeiro porque é
+    o comando explícito do dono —, **não** a do relógio. Ordenar por tempo
+    restante foi o defeito de 17/08 no EOP: o painel marcou `← primeira` na
+    janela, faltando 2h18, enquanto *"fila zerada"* já estava verdadeira com 0
+    pendentes duas linhas abaixo. O menor número só decide entre as condições que
+    ainda **não** bateram; qual delas manda é a cadeia que decide.
+
+    O `motivo` de cada linha é a chave que amarra o painel ao nome que a cadeia
+    dá à mesma condição. Sem ela isto voltaria a ser uma lista paralela — a
+    quarta cópia que o `diagnostico.py` foi escrito para impedir (ADR-013).
+    """
     linhas = []
+    linhas.append(("kill-switch", "kill-switch",
+                   "PRESENTE" if loop.kill_switch else "ausente", None))
+    restam_it = st.get("max_iteracoes", 0) - st.get("iteracao", 0)
+    linhas.append(("teto de iterações", "iterações %d" % st.get("max_iteracoes", 0),
+                   "restam %d" % max(0, restam_it), None))
+    linhas.append(("sem progresso", "sem progresso",
+                   "%d/%d parada(s)" % (st.get("sem_progresso", 0),
+                                        st.get("max_sem_progresso", 0)), None))
+    linhas.append(("fila zerada", "fila zerada", "%d pendente(s)" % pendentes, None))
     if st.get("janela"):
         falta = minutos_ate_fechar(st["janela"], st.get("dias"))
         rot = "janela %s%s" % (st["janela"],
                                " (%s)" % st["dias"] if st.get("dias") else "")
-        linhas.append((rot, "fecha em %s" % dur(falta), falta))
+        linhas.append(("fora da janela de trabalho", rot,
+                       "fecha em %s" % dur(falta), falta))
     if st.get("duracao_max_min"):
         resta = st["duracao_max_min"] - minutos_desde(st.get("armado_em"))
-        linhas.append(("relógio %s" % dur(st["duracao_max_min"]),
+        linhas.append(("duração máxima", "relógio %s" % dur(st["duracao_max_min"]),
                        "resta %s" % dur(resta), resta))
     if st.get("escopo_itens"):
         fechados = feitos - st.get("feitos_ao_armar", 0)
         falta_n = st["escopo_itens"] - fechados
-        linhas.append(("escopo %d itens" % st["escopo_itens"],
+        linhas.append(("escopo concluído", "escopo %d itens" % st["escopo_itens"],
                        "faltam %d" % max(0, falta_n), None))
     if st.get("escopo_ate"):
-        linhas.append(("marcador %r" % st["escopo_ate"][:28], "—", None))
-    linhas.append(("fila zerada", "%d pendente(s)" % pendentes, None))
-    restam_it = st.get("max_iteracoes", 0) - st.get("iteracao", 0)
-    linhas.append(("iterações %d" % st.get("max_iteracoes", 0),
-                   "restam %d" % max(0, restam_it), None))
-    com_tempo = [x for x in linhas if x[2] is not None]
-    primeira = min(com_tempo, key=lambda x: x[2])[0] if com_tempo else None
-    return linhas, primeira
+        linhas.append(("escopo concluído", "marcador %r" % st["escopo_ate"][:28],
+                       "—", None))
+    return linhas
+
+
+def _linha_do_motivo(linhas, motivo, detalhe):
+    """Índice da linha que corresponde ao motivo — ou `None` se ele não tem linha.
+
+    `escopo concluído` nomeia **duas** condições distintas (N itens × marcador
+    alcançado), e só o detalhe as separa: a cadeia diz `"marcador alcançado: X"`
+    numa e `"N item(ns) fechados nesta rodada"` na outra. Casar só pelo motivo
+    marcaria a linha errada metade das vezes.
+    """
+    candidatos = [i for i, l in enumerate(linhas) if l[0] == motivo]
+    if not candidatos:
+        return None
+    if len(candidatos) > 1 and (detalhe or "").startswith("marcador"):
+        return candidatos[-1]
+    return candidatos[0]
+
+
+def quem_encerra(loop, st, pendentes, feitos):
+    """`(motivo, detalhe, marca)` — quem manda no fim **agora**.
+
+    São três perguntas diferentes, e o painel respondia sempre a terceira:
+
+    1. a rodada já morreu? então o motivo é fato gravado (`encerrado_por`), e
+       projeção de futuro não tem o que dizer sobre ela;
+    2. está viva, mas alguma condição **já** é verdadeira? então a próxima
+       parada encerra — isso é aviso, não previsão. Vale `iteracao + 1` porque a
+       pergunta de quem acompanha é *"e na próxima parada?"*, e o estado em
+       disco é o da parada que já passou;
+    3. nenhuma bateu? aí, e só aí, vale a que chega primeiro no relógio.
+    """
+    if st.get("encerrado_por"):
+        return (st["encerrado_por"], st.get("encerrado_detalhe") or "",
+                "← encerrou aqui")
+    achado = condicoes_de_fim(loop, st, contagem=(pendentes, feitos),
+                              iteracao=st.get("iteracao", 0) + 1)
+    if achado:
+        return achado[0], achado[1], "← já bateu: a próxima parada encerra"
+    return None, None, None
 
 
 def render(loop, st, anterior):
@@ -130,7 +195,14 @@ def render(loop, st, anterior):
     if not ativo:
         cor, estado = C.DIM, "PARADO"
         if st.get("encerrado_por"):
-            estado = "ENCERRADO · %s" % st["encerrado_por"]
+            # "há 10min" no cabeçalho porque o painel é lido de longe e a hora
+            # que ele carimba é a da LEITURA, não a do fim: em 17/08 um painel
+            # das 09:42 mostrava uma rodada morta às 09:32 sem nada dizendo que
+            # havia dez minutos entre as duas coisas.
+            estado = "ENCERRADO · %s%s" % (
+                st["encerrado_por"],
+                " há %s" % dur(minutos_desde(st["encerrado_em"]))
+                if st.get("encerrado_em") else "")
             cor = C.AMAR
     elif fase == "encerrando":
         cor, estado = C.AMAR, "ENCERRANDO · %s" % (st.get("encerrado_por") or "")
@@ -156,7 +228,8 @@ def render(loop, st, anterior):
         L.append("  %ssessão %s — outra sessão no mesmo repo é ignorada%s"
                  % (C.DIM, curto(st["session_id"]), C.RESET))
     if st.get("objetivo"):
-        L.append("  %s%s%s" % (C.DIM, st["objetivo"][:96], C.RESET))
+        L.append("  %s%s%s" % (C.DIM, objetivo_para_exibir(st["objetivo"], 96),
+                               C.RESET))
     L.append("")
     L.append("  Fila   %s  %d/%d" % (barra(feitos, total), feitos, total)
              + ("  (%d%%)" % round(100.0 * feitos / total) if total else ""))
@@ -164,17 +237,40 @@ def render(loop, st, anterior):
     L.append("  Agora  %s→ %s%s" % (C.NEG, (prox or "—")[:88], C.RESET))
     L.append("")
 
-    linhas, primeira = condicoes(st, pend, feitos)
-    L.append("  %sFim por%s" % (C.DIM, C.RESET))
-    for rot, resta, _ in linhas:
-        marca = "  %s← primeira%s" % (C.AMAR, C.RESET) if rot == primeira else ""
-        L.append("    %-30s %s%s" % (rot, resta, marca))
+    linhas = condicoes(loop, st, pend, feitos)
+    motivo, detalhe, marca = quem_encerra(loop, st, pend, feitos)
+    alvo = None
+    if motivo:
+        alvo = _linha_do_motivo(linhas, motivo, detalhe)
+        if alvo is None:
+            # Condição sem linha própria no painel — política de ASK e ação
+            # irreversível dependem de classificar a mensagem, então o painel
+            # não as mede. Entram como linha assim mesmo: o painel pode não
+            # saber prever um fim, mas nunca pode deixar de dizer qual foi.
+            linhas.append((motivo, motivo, detalhe or "—", None))
+            alvo = len(linhas) - 1
+    else:
+        com_tempo = [(i, l) for i, l in enumerate(linhas) if l[3] is not None]
+        if com_tempo:
+            alvo = min(com_tempo, key=lambda x: x[1][3])[0]
+            marca = "← primeira"
 
-    sp = st.get("sem_progresso", 0)
-    ks = "PRESENTE" if loop.kill_switch else "ausente"
-    alerta = C.VERM if (sp or loop.kill_switch) else C.DIM
-    L.append("    %ssem progresso %d/%d · kill-switch %s%s"
-             % (alerta, sp, st.get("max_sem_progresso", 0), ks, C.RESET))
+    cabeca = "Fim por"
+    if st.get("encerrado_por"):
+        cabeca += "   %sa rodada acabou — o que resta abaixo é tempo que não " \
+                  "corre mais%s" % (C.DIM, C.RESET)
+    L.append("  %s%s%s" % (C.DIM, cabeca, C.RESET))
+    for i, (mot, rot, resta, _min) in enumerate(linhas):
+        perigo = (mot == "kill-switch" and loop.kill_switch) or \
+                 (mot == "sem progresso" and st.get("sem_progresso", 0))
+        cor = C.VERM if perigo else ""
+        if i == alvo:
+            cor_marca = C.VERM if st.get("encerrado_por") else C.AMAR
+            sufixo = "  %s%s%s" % (cor_marca, marca, C.RESET)
+        else:
+            sufixo = ""
+        L.append("    %s%-30s %s%s%s" % (cor, rot, resta,
+                                         C.RESET if cor else "", sufixo))
 
     paradas = ultimas_paradas(loop)
     if paradas:

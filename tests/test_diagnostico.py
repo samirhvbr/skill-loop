@@ -466,6 +466,21 @@ class TestComandoPorque(Base):
         self.assertIn("ativo", saida)
         self.assertIn("continua", saida)     # o "continua" digitado não reativa
 
+    def test_resumo_fim_por_segue_a_ordem_da_cadeia(self):
+        # O `fim por` do status prometia "na ordem em que o hook as testa" e
+        # entregava outra — escopo primeiro, iterações por último. Resumo que
+        # promete ordem e entrega outra é pior que resumo sem ordem: quem lê tira
+        # conclusão de qual bate antes. Mutação: reordenar e esta cai.
+        st = self.armar()
+        st.update(janela="08:00-18:00", duracao_max_min=360, escopo_itens=5)
+        self.loop.gravar(st)
+        _, saida = self.ctl("status", "--raiz", self.tmp)
+        linha = [l for l in saida.split("\n") if l.startswith("fim por")][0]
+        posicoes = [linha.index(t) for t in
+                    ("iterações", "fila zerada", "fora de", "de relógio",
+                     "itens desta rodada")]
+        self.assertEqual(posicoes, sorted(posicoes))
+
     def test_raiz_aceita_antes_e_depois_do_subcomando(self):
         # A ordem natural é depois, e era erro de uso — no comando que existe
         # justamente para socorrer quem está no escuro.

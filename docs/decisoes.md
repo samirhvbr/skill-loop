@@ -114,6 +114,36 @@ ADR. Decisão nova entra aqui, com data e status, no mesmo commit da mudança.
 - **Consequência:** o loop raramente fica sem fila — e quando fica, é sinal
   honesto de fim, não de perda de fio.
 
+### Emenda de 2026-08-17 — a pergunta não é item
+
+- **O que aconteceu:** no EOP, a parada `#0003` fechou com *"**Pergunta:** sigo
+  com esse discriminador, ou você quer a guarda de fato-sem-listener mesmo
+  assim?"*. `\bsigo (?:com|por|para|pra)\b` é HANDOFF; o parágrafo tem `:`; a
+  colheita pegou o que vinha depois do último `:` e **a própria pergunta virou
+  item de fila** — com o `**` do negrito partido na frente. Ela foi marcada
+  `- [x]`, os pendentes foram a zero, a condição *"fila zerada"* disparou e a
+  rodada encerrou às 09:32. Uma condição de fim correta, disparando sobre uma
+  contagem que não devia existir.
+- **Decisão:** candidato de colheita que **seja**, ou **contenha**, uma pergunta
+  já detectada é descartado — nas três zonas (direta no fecho, direta na
+  narrativa, retórica) e **nos dois vereditos**.
+- **O que a emenda não muda:** a colheita continua **independente do veredito**,
+  que é o coração do ADR-005. O filtro roda igual em ASK e em DOC. O que se
+  corrige não é *quando* se colhe — é *o quê*.
+- **Justificativa:** a colheita procura trabalho **declarado pendente**; a
+  pergunta é o oposto — é trabalho que o agente declarou que *não* faz sem
+  resposta. E ela já tem três lugares seus: a entry, o `INDEX.md` e a premissa do
+  `ASSUMPTIONS.md` (ADR-003). Um quarto lugar, na fila, não a preserva melhor:
+  torna-a **marcável como feita**, e um `- [x]` numa pergunta é o loop dizendo
+  que respondeu a si mesmo.
+- **Onde erra de propósito:** contenção com alvo curto acha qualquer coisa dentro
+  de pergunta longa, então há piso de 12 caracteres. Abaixo dele o item passa —
+  colher a mais deixa uma linha extra na fila, colher a menos apaga trabalho
+  declarado, e só o segundo é silencioso.
+- **Consequência:** condição de fim por fila zerada volta a medir trabalho. Uma
+  rodada que termina é uma rodada que acabou o que tinha a fazer, não uma que
+  perguntou alguma coisa.
+
 ---
 
 ## ADR-006 — `QUEUE.md` é a fonte do "próximo passo"
@@ -332,6 +362,29 @@ ADR. Decisão nova entra aqui, com data e status, no mesmo commit da mudança.
 - **Consequência:** "não continuou" deixa de ser investigação e passa a ser um
   comando. `loop-ctl porque` antes de sair de perto do monitor é o rito novo.
 
+### Emenda de 2026-08-17 (tarde) — o painel também consome a cadeia
+
+- **O que aconteceu:** o item 2 acima tirou a cadeia do hook, mas o
+  `loop-watch` seguiu com a **sua** lista — e ela tinha as condições erradas (sem
+  kill-switch, sem sem-progresso), na ordem errada (por tempo restante), com o
+  veredito errado. No EOP, num painel de rodada **já encerrada por fila zerada**,
+  a marca `← primeira` apontava a janela, faltando 2h18, enquanto *"fila zerada,
+  0 pendente(s)"* estava impressa duas linhas abaixo. Era a quarta cópia que o
+  `diagnostico.py` foi escrito para impedir, escrita pela mesma mão, no mesmo dia.
+- **Decisão:** o painel **pergunta**, não opina. `loop_watch.condicoes` devolve
+  a cadeia na ordem do hook e cada linha carrega o `motivo` com que
+  `condicoes_de_fim` a nomeia; `quem_encerra` separa três perguntas que o painel
+  respondia como uma:
+  1. a rodada morreu? o motivo é fato gravado (`encerrado_por`) → `← encerrou aqui`;
+  2. está viva e alguma condição **já** é verdadeira? → `← já bateu: a próxima
+     parada encerra` (aviso, não previsão);
+  3. nenhuma bateu? só então vale a que chega primeiro no relógio → `← primeira`.
+- **Regra que fica:** *ordenar por tempo restante só decide entre as condições
+  que ainda não bateram.* Qual delas manda é a cadeia que decide.
+- **Consequência:** um painel de rodada morta para de projetar futuro, e um
+  painel de rodada viva ganha um aviso que não existia — "a próxima parada
+  encerra" é acionável enquanto ainda dá tempo.
+
 ---
 
 ## Pendências
@@ -342,6 +395,6 @@ ADR. Decisão nova entra aqui, com data e status, no mesmo commit da mudança.
 | P-02 | Scan de segredo no texto antes de gravar a `entry` — vendorizar os padrões do `redact.py` do AUDITOR, como o COMMITTER fez. | aberta |
 | P-03 | Desempate por modelo quando a confiança é `media` (v2). Hoje o veredito léxico vale. | aberta |
 | P-04 | Rearme automático por cron ao reabrir a janela (F3). | aberta |
-| P-05 | Medir em operação: iterações por sessão, distribuição das condições de fim, trabalho por iteração. Só o uso real dá esses números. | aberta |
+| P-05 | Medir em operação: iterações por sessão, distribuição das condições de fim, trabalho por iteração. Só o uso real dá esses números. **Duas rodadas no EOP, as duas encerradas por `fila zerada`** (16/08 21:19 e 17/08 09:32) — nenhuma bateu em janela, relógio, teto ou sem-progresso. E a de 17/08 zerou por item espúrio (a emenda do ADR-005): das 2 iterações, **zero** itens reais da fila foram fechados. Duas rodadas não são distribuição; a leitura preliminar é que a fila acaba antes de todo o resto. | aberta |
 | P-06 | Teste de item hostil plantado numa mensagem (T-06). | aberta |
 | P-07 | O teto de 3 s da espera pelo fecho (ADR-012) é **escolha, não medição**. Falta medir quanto o fecho realmente demora a chegar, e em que tamanho de sessão a espera estoura. | aberta |

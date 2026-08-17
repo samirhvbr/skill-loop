@@ -1,6 +1,6 @@
 # Versão — skill-LOOP
 
-**Versão atual:** `0.2.2`
+**Versão atual:** `0.2.3`
 
 > Este arquivo é a **fonte da verdade** da versão do projeto. Qualquer lugar que
 > precise exibir ou reportar a versão extrai o **primeiro número semver (`X.Y.Z`)**
@@ -60,6 +60,68 @@ da mesma entrega repetem a versão.
 ---
 
 ## 3. Changelog
+
+### `0.2.3` — 2026-08-17 — a pergunta não era item, e o painel não era testemunha
+
+Um painel do EOP lido às 09:42 sobre uma rodada morta às 09:32. Quatro coisas
+erradas nele, e a pior não era de exibição.
+
+- **A pergunta virava item de fila — e foi ela que encerrou a rodada.** O fecho
+  da parada `#0003` era *"**Pergunta:** sigo com esse discriminador…"*: `\bsigo
+  (?:com|por|para|pra)\b` é HANDOFF, o parágrafo tem `:`, e a colheita levou o que
+  vinha depois do último `:` para o `QUEUE.md` — com o `**` do negrito partido na
+  frente. Marcada `- [x]`, ela zerou os pendentes e disparou *"fila zerada"*: uma
+  condição de fim correta disparando sobre uma contagem que não devia existir.
+  Agora candidato que **seja** ou **contenha** pergunta detectada é descartado,
+  nas três zonas e **nos dois vereditos** — o ADR-005 continua de pé, porque o que
+  muda não é *quando* se colhe, é *o quê* (emenda ao ADR-005).
+- **O painel voltou a consumir a cadeia, em vez de manter a sua.** O `0.2.2`
+  tirou a lista de condições do hook e deixou a do `loop-watch` de lado: sem
+  kill-switch, sem sem-progresso, ordenada por tempo restante. Numa rodada
+  **já encerrada por fila zerada**, ele marcava `← primeira` na janela — faltando
+  2h18 — com *"fila zerada, 0 pendente(s)"* impressa duas linhas abaixo. Era a
+  quarta cópia que o `diagnostico.py` foi escrito para impedir. A marca agora
+  responde qual das três perguntas cabe: `← encerrou aqui` (fato gravado),
+  `← já bateu: a próxima parada encerra` (aviso, numa rodada viva), `← primeira`
+  (relógio — só quando nenhuma bateu). Emenda ao ADR-013.
+- **O número da parada vem do nome do arquivo.** O painel lia o `n:` do
+  front-matter, que até hoje de manhã era a iteração — e `armar` zera a iteração a
+  cada rodada. Quatro paradas gravadas como `0001`..`0004` apareciam como
+  `#4 #1 #2 #1`. Régua única em `estado.NUM_DE_ENTRY`, para quem escreve e para
+  quem lê.
+- **Objetivo ilegível é recusado também na saída.** A guarda de `armar` nasceu no
+  `0.2.2`, depois de o `.loop/` do EOP já estar armado com `"¨¨"` — e estado
+  gravado antes de uma guarda não passa a obedecê-la. O painel anunciou o mojibake
+  por rodada inteira. Porta e vitrine agora medem com a mesma função
+  (`estado.objetivo_legivel`), e a exibição diz **o que** há de errado e **com
+  quê** consertar, em vez de trocar o lixo por um `—` que se confundiria com
+  "não declarou objetivo".
+- **`encerrado_detalhe` no `STATE.json`** (campo aditivo): o detalhe morava só no
+  `STATUS.md`, em prosa. É ele que separa duas condições que dividem o mesmo
+  motivo — `escopo concluído` por N itens × por marcador — e o que responde
+  "zerada com quantos?" sem abrir outro arquivo.
+- O cabeçalho do painel diz **há quanto tempo** encerrou: ele carimba a hora da
+  *leitura*, e 09:42 sobre uma rodada morta às 09:32 parecia rodada de agora.
+
+**16 testes novos** (10 em `test_watch.py`, 6 em `test_classificador.py`, 1 em
+`test_ciclo.py`), total **171**.
+
+| Controle desligado | Testes que caem |
+|---|---|
+| painel volta a ranquear por relógio (ignora `encerrado_por`) | 3 |
+| pergunta volta a virar item de fila | 2 |
+| `quem_encerra` não consulta `condicoes_de_fim` | 2 |
+| painel volta a ler o `n:` do front-matter | 1 |
+| objetivo ilegível passa na régua (porta e vitrine) | 1 |
+| `_linha_do_motivo` ignora o detalhe (escopo ambíguo) | 1 |
+| hook para de gravar `encerrado_detalhe` | 1 |
+| `_dedup` sem tirar marcação solta das pontas | 1 |
+
+**Medição que a rodada rendeu (P-05):** duas rodadas reais no EOP, **as duas**
+encerradas por `fila zerada` — nenhuma bateu em janela, relógio, teto ou
+sem-progresso. E a de 17/08 zerou por item espúrio: das suas 2 iterações,
+**zero** itens reais da fila foram fechados. Duas rodadas não são distribuição,
+mas a leitura preliminar é que a fila acaba antes de tudo o mais.
 
 ### `0.2.2` — 2026-08-17 — o fail-open era mudo: `loop-ctl porque`
 

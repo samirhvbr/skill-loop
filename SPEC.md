@@ -86,6 +86,16 @@ Independe do veredito ASK/DOC — é o que mantém o fio:
   removido e o item é a primeira frase (ADR-005).
 - Teto de 12 itens por parada; dedup por slug dos 60 primeiros caracteres,
   contra a fila inteira (pendentes **e** feitos).
+- **A pergunta detectada nunca vira item** — nos dois vereditos (emenda ao
+  ADR-005). Candidato que seja, ou contenha, uma pergunta já detectada (direta no
+  fecho, direta na narrativa ou retórica) é descartado antes do dedup;
+  a comparação é por conteúdo normalizado, sem marcação, nos dois sentidos de
+  contenção, com piso de 12 caracteres. A pergunta já tem seus lugares: a entry,
+  o `INDEX.md` e a premissa do `ASSUMPTIONS.md`. Na fila ela seria **marcável
+  como feita** — e um `- [x]` numa pergunta zera a fila e encerra a rodada.
+- Marcação solta (`*`, `_`, `` ` ``) é retirada das **pontas** do item: a
+  colheita corta no último `:` e herdava o negrito partido (`**Pendente:** rodar
+  o lint` deixava `** rodar o lint`). No meio do item, marcação é do item.
 
 ---
 
@@ -176,13 +186,23 @@ table`, `rm -rf`, `push --force`, `produção`, `cobrança`, …) ou `parar`.
 segue a decisão do ADR-003 do COMMITTER — crontab do Linux, nunca rotina
 agendada do Claude Code (que roda na nuvem e não enxerga `~/x`).
 
+Esta tabela **não é implementada duas vezes**: `lib/diagnostico.py::condicoes_de_fim`
+é a cadeia, o hook a consome no lugar da própria `if/elif`, e quem só exibe
+(`loop-ctl porque`, `loop-watch`) pergunta a ela em vez de manter uma lista
+paralela — inclusive para a **ordem** em que as condições aparecem (ADR-013).
+
 ### 5.1 Encerramento
-1. Grava `.loop/STATUS.md` com motivo, detalhe, iterações e saldo da fila.
-2. `notificar: true` (default) → `fase = "encerrando"` e um **último** `block`
+1. Grava no `STATE.json` o `encerrado_por` (motivo), o `encerrado_detalhe` e o
+   `encerrado_em`. O detalhe é o que separa duas condições que **dividem o mesmo
+   motivo** — `escopo concluído` por N itens × por marcador alcançado — e o que
+   responde "zerada com quantos?" sem abrir outro arquivo. Campo aditivo: estado
+   escrito antes dele lê `None`.
+2. Grava `.loop/STATUS.md` com motivo, detalhe, iterações e saldo da fila.
+3. `notificar: true` (default) → `fase = "encerrando"` e um **último** `block`
    mandando o agente enviar a push notification e **não** retomar trabalho. A
    parada seguinte encerra de vez. (O hook é um script; a tool de notificação é
    do agente — ADR-009.)
-3. `notificar: false` → `ativo = false` na hora, `systemMessage` e exit 0.
+4. `notificar: false` → `ativo = false` na hora, `systemMessage` e exit 0.
 
 ---
 
@@ -205,6 +225,21 @@ JSON inválido → o hook trata como ausente e sai (fail-open).
 Item da fila que carregue `<!-- colhido em #NNNN -->` tem o comentário removido
 antes de virar chave de dedup **e** antes de entrar no `reason`: o rastro é
 auditoria, não conteúdo. Os dois vazamentos aconteceram e viraram teste.
+
+**O número de uma parada é o do nome do arquivo** (`NNNN-`), nunca o campo `n:`
+do front-matter nem a iteração: `armar` zera a iteração a cada rodada, então
+numerar por ela faz a rodada de hoje passar por cima da de ontem. Quem escreve
+(`proximo_numero_de_entry`) e quem lê (o painel) usam a mesma régua,
+`estado.NUM_DE_ENTRY`. O campo `n:` continua sendo gravado, e entries anteriores
+a `0.2.3` trazem nele o número antigo — o disco é que manda.
+
+**`objetivo` é reportado, nunca executado** — vai para o `STATUS.md` e para o
+`reason` de toda parada. Objetivo que exista e não tenha letra nem dígito
+(pontuação, mojibake, placeholder) é recusado por `armar` **e** substituído na
+exibição, pela mesma função (`estado.objetivo_legivel`). Guarda na entrada não
+dispensa régua na saída: estado gravado antes de uma guarda não passa a
+obedecê-la. Vazio segue válido — é a rodada sem objetivo declarado, que imprime
+`—`.
 
 ---
 

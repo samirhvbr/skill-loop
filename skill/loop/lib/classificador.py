@@ -299,12 +299,69 @@ def colher_declarados(paragrafos):
 def _dedup(itens, teto=12):
     vistos, saida = set(), []
     for it in itens:
-        it = it.strip(" .;,")
+        # `*_\`` entram no strip porque a colheita corta no último `:` e herda o
+        # que sobra do negrito: `**Pendente:** rodar o lint` deixava `** rodar o
+        # lint` na fila. Só nas pontas — marcação no meio do item é do item.
+        it = it.strip(" .;,*_`")
         chave = _norm(it)[:60]
         if it and chave not in vistos:
             vistos.add(chave)
             saida.append(it)
     return saida[:teto]
+
+
+def _sem_marcacao(texto):
+    """Texto sem as marcas de ênfase, para comparar conteúdo e não formatação.
+
+    `**Pergunta:** sigo com X?` e `** sigo com X?` são a mesma frase para efeito
+    de *"isto é a pergunta?"*; o que os separa é negrito partido no meio por um
+    `rsplit(':')`.
+    """
+    return re.sub(r"[*_`~#>]+", " ", texto)
+
+
+def _e_a_pergunta(item, perguntas):
+    """O item colhido é — ou é um pedaço de — uma pergunta já detectada?
+
+    Comparação nos **dois** sentidos: o item pode ser um pedaço da pergunta (o
+    que sobra depois do último `:`, que foi o caso do EOP) ou tê-la engolido
+    inteira.
+
+    O piso de 12 caracteres existe porque contenção com alvo curto acha
+    qualquer coisa dentro de uma pergunta longa. Abaixo dele o item passa: errar
+    para o lado de colher a mais deixa uma linha extra na fila, e errar para o
+    lado de colher a menos apaga trabalho declarado — só o segundo é silencioso.
+    """
+    alvo = " ".join(_norm(_sem_marcacao(item)).split())
+    if len(alvo) < 12:
+        return False
+    for q in perguntas:
+        outro = " ".join(_norm(_sem_marcacao(q)).split())
+        if outro and (alvo in outro or outro in alvo):
+            return True
+    return False
+
+
+def _sem_as_perguntas(itens, perguntas):
+    """A pergunta não é item de fila (emenda ao ADR-005).
+
+    A colheita procura **trabalho declarado pendente**; a pergunta é o oposto
+    disso — é trabalho que o agente declarou que *não* faz sem resposta. Ela já
+    tem três lugares seus: a entry, o `INDEX.md` e a premissa do
+    `ASSUMPTIONS.md` (ADR-003). Um quarto, na fila, não a preserva melhor: a
+    torna **marcável como feita**, e um `- [x]` numa pergunta é o loop dizendo
+    que respondeu a si mesmo.
+
+    Em 17/08 no EOP foi exatamente isso, e não parou na contabilidade: a
+    pergunta era o 22º item, o `contagem_fila()` chegou a zero pendentes e a
+    condição "fila zerada" encerrou a rodada. Uma condição de fim correta
+    disparando sobre uma fila que continha uma pergunta.
+
+    O ADR-005 segue de pé — a colheita continua **independente do veredito**
+    ASK/DOC, e este filtro roda nos dois. O que ele corrige não é *quando* se
+    colhe, é *o quê*.
+    """
+    return [i for i in itens if not _e_a_pergunta(i, perguntas)]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -368,7 +425,11 @@ def classificar(texto, ultimo_tool=None):
     relatos = [r for r in RELATO if re.search(r, _norm(limpo), re.MULTILINE)]
 
     declarados = colher_declarados(paras)
-    itens = _dedup(colher_itens(fecho) + declarados)
+    # Todas as perguntas detectadas, das três zonas: a retórica também não é
+    # item — ela já foi respondida pelo próprio texto, e ir para a fila seria
+    # mandar o agente refazer o que ele acabou de concluir.
+    itens = _dedup(_sem_as_perguntas(colher_itens(fecho) + declarados,
+                                     diretas_fecho + diretas_narr + retoricas))
     ev = []
     if declarados:
         ev.append("%d pendência(s) declarada(s) pelo próprio agente" % len(declarados))

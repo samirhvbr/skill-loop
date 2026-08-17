@@ -35,7 +35,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(_AQUI), "lib"))
 
 from classificador import classificar          # noqa: E402
 from diagnostico import condicoes_de_fim       # noqa: E402
-from estado import Loop, achar_raiz, agora     # noqa: E402
+from estado import (Loop, achar_raiz, agora,   # noqa: E402
+                    objetivo_para_exibir)
 from transcricao import ultima_mensagem        # noqa: E402
 
 # repo/skill/loop/hooks → repo
@@ -226,6 +227,11 @@ def principal():
 
     if motivo:
         st["encerrado_por"] = motivo
+        # O detalhe morava só no STATUS.md, em prosa. Ele é o que separa duas
+        # condições que compartilham motivo ("escopo concluído" por N itens ×
+        # por marcador) e o que responde "zerada com quantos?" sem abrir outro
+        # arquivo. Campo aditivo: estado antigo lê `None` e nada quebra.
+        st["encerrado_detalhe"] = detalhe or ""
         st["encerrado_em"] = agora()
         loop.gravar_status(st, motivo, detalhe or "")
         if st.get("notificar"):
@@ -257,7 +263,7 @@ def principal():
         "item": item or "(fila vazia)",
         "pendentes": pendentes,
         "feitos": feitos,
-        "objetivo": st.get("objetivo") or "—",
+        "objetivo": objetivo_para_exibir(st.get("objetivo")),
         "bloco_ask": _bloco_ask(res),
         "bloco_colhidos": _bloco_colhidos(colhidos),
     })

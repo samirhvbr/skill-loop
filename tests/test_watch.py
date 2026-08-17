@@ -79,6 +79,10 @@ class TestRender(unittest.TestCase):
                     "item_da_fila: \"i\"\ndecisao: %s\nfecho_do_turno: %s\n---\n\ncorpo\n"
                     % (n, kind, sinal, min(n, 59), decisao, parcial))
 
+    def fila(self, conteudo):
+        with open(self.loop.p("QUEUE.md"), "w", encoding="utf-8") as f:
+            f.write("# Fila\n\n" + conteudo)
+
     def render(self, anterior=None, st=None):
         return lw.render(self.loop, st or self.loop.ler(), anterior)
 
@@ -130,7 +134,11 @@ class TestRender(unittest.TestCase):
     def test_kill_switch_visivel(self):
         open(self.loop.p("STOP"), "w").close()
         texto, _ = self.render()
-        self.assertIn("kill-switch PRESENTE", texto)
+        self.assertIn("kill-switch", texto)
+        self.assertIn("PRESENTE", texto)
+        # E ele não fica mais num canto do painel: kill-switch é o primeiro elo
+        # da cadeia, então é ELE que decide a próxima parada — o painel diz isso.
+        self.assertIn("já bateu", texto)
 
     def test_parado_avisa_que_o_hook_esta_inerte(self):
         # "PARADO" foi lido como "entre duas iterações", e o "continua" digitado
@@ -166,6 +174,120 @@ class TestRender(unittest.TestCase):
         st["session_id"] = "6bd4ebd5-599f"
         texto, _ = self.render(st=st)
         self.assertNotIn("6bd4ebd5", texto)
+
+    # ── a cadeia manda no painel, não o relógio (ADR-013) ───────────────────
+
+    def _marcada(self, texto, marca):
+        """A linha do bloco `Fim por` que carrega esta marca."""
+        return [l for l in texto.split("\n") if marca in l]
+
+    def test_rodada_morta_marca_quem_encerrou_e_nao_quem_chegaria_primeiro(self):
+        # O painel do EOP em 17/08, exato: encerrado por fila zerada às 09:32, e
+        # o bloco marcando `← primeira` na janela porque faltavam 2h18 nela.
+        # Mutação: voltar a ranquear por tempo e esta asserção cai — a marca
+        # migra para a janela e o painel volta a apontar futuro em rodada morta.
+        self.fila("- [x] tudo feito\n")
+        st = self.loop.ler()
+        st["ativo"] = False
+        st["encerrado_por"] = "fila zerada"
+        st["encerrado_detalhe"] = "22 item(ns) concluído(s)"
+        st["encerrado_em"] = "2026-08-17T09:32:07-03:00"
+        texto, _ = self.render(st=st)
+        encerrou = self._marcada(texto, "← encerrou aqui")
+        self.assertEqual(len(encerrou), 1)
+        self.assertIn("fila zerada", encerrou[0])
+        self.assertEqual(self._marcada(texto, "← primeira"), [])
+
+    def test_rodada_viva_avisa_condicao_que_ja_bateu(self):
+        # Viva, mas a fila já está em zero: a PRÓXIMA parada encerra. Isso é
+        # fato medido, não previsão — e era o que o painel não dizia.
+        self.fila("- [x] tudo feito\n")
+        texto, _ = self.render()
+        ja = self._marcada(texto, "← já bateu")
+        self.assertEqual(len(ja), 1)
+        self.assertIn("fila zerada", ja[0])
+        self.assertEqual(self._marcada(texto, "← primeira"), [])
+
+    def test_sem_condicao_batida_volta_a_valer_o_relogio(self):
+        # A pergunta "quanto falta?" continua respondida quando nada bateu.
+        st = self.loop.ler()
+        st["duracao_max_min"] = 5
+        texto, _ = self.render(st=st)
+        primeira = self._marcada(texto, "← primeira")
+        self.assertEqual(len(primeira), 1)
+        self.assertIn("relógio", primeira[0])
+
+    def test_ordem_do_bloco_e_a_da_cadeia_do_hook(self):
+        # O anti-quarta-cópia: se alguém reordenar o painel "para ficar bonito",
+        # ele volta a discordar da ordem em que o hook realmente testa.
+        linhas = lw.condicoes(self.loop, self.loop.ler(), 2, 1)
+        self.assertEqual([m for m, _r, _t, _x in linhas],
+                         ["kill-switch", "teto de iterações", "sem progresso",
+                          "fila zerada", "fora da janela de trabalho",
+                          "duração máxima"])
+
+    def test_motivo_sem_linha_propria_ainda_aparece(self):
+        # `política ASK=parar` depende de classificar a mensagem, então o painel
+        # não a mede — o que não o autoriza a omitir por que a rodada acabou.
+        st = self.loop.ler()
+        st["ativo"] = False
+        st["encerrado_por"] = "política ASK=parar"
+        st["encerrado_detalhe"] = "pergunta-direta"
+        texto, _ = self.render(st=st)
+        encerrou = self._marcada(texto, "← encerrou aqui")
+        self.assertEqual(len(encerrou), 1)
+        self.assertIn("política ASK=parar", encerrou[0])
+
+    def test_escopo_por_marcador_marca_a_linha_do_marcador(self):
+        # Duas condições dividem o motivo "escopo concluído"; só o detalhe as
+        # separa. Sem ele, a marca cai na linha errada metade das vezes.
+        st = self.loop.ler()
+        st["ativo"] = False
+        st["escopo_itens"] = 5
+        st["escopo_ate"] = "D3. rodar o lint"
+        st["encerrado_por"] = "escopo concluído"
+        st["encerrado_detalhe"] = "marcador alcançado: D3. rodar o lint"
+        texto, _ = self.render(st=st)
+        encerrou = self._marcada(texto, "← encerrou aqui")
+        self.assertEqual(len(encerrou), 1)
+        self.assertIn("marcador", encerrou[0])
+
+    def test_cabecalho_diz_ha_quanto_tempo_encerrou(self):
+        # O painel carimba a hora da LEITURA; sem isto, 09:42 numa rodada morta
+        # às 09:32 parece rodada de agora.
+        st = self.loop.ler()
+        st["ativo"] = False
+        st["encerrado_por"] = "fila zerada"
+        st["encerrado_em"] = "2026-08-17T09:32:07-03:00"
+        texto, _ = self.render(st=st)
+        self.assertIn("ENCERRADO · fila zerada há ", texto)
+
+    # ── o número da parada e o objetivo ilegível ────────────────────────────
+
+    def test_numero_da_parada_vem_do_nome_do_arquivo(self):
+        # A entry 0003 do EOP tem `n: 1` dentro — escrita quando o hook ainda
+        # numerava pela iteração, que `iniciar()` zera a cada rodada. O painel
+        # mostrou `#4 #1 #2 #1` para 0001..0004. Mutação: voltar a confiar no
+        # front-matter e o `#1` reaparece.
+        self.entry(1, "DOC")
+        nome = "0003-ASK-x.md"
+        with open(os.path.join(self.loop.entries, nome), "w", encoding="utf-8") as f:
+            f.write("---\nn: 1\nkind: ASK\nsinal: pergunta-direta\nconfianca: alta\n"
+                    "ts: 2026-08-17T09:03:00-03:00\nsessao: x\nitem_da_fila: \"i\"\n"
+                    "decisao: continuou\nfecho_do_turno: completo\n---\n\ncorpo\n")
+        texto, _ = self.render()
+        self.assertIn("#3", texto)
+        self.assertNotIn("#1     ASK", texto)
+
+    def test_objetivo_ilegivel_nao_passa_na_vitrine(self):
+        # `"¨¨"` foi armado no EOP antes de a guarda de `armar` existir. Estado
+        # gravado antes de uma guarda não passa a obedecê-la — e o painel seguia
+        # anunciando o mojibake a cada leitura, por rodada inteira.
+        st = self.loop.ler()
+        st["objetivo"] = "¨¨"
+        texto, _ = self.render(st=st)
+        self.assertIn("ilegível no STATE.json", texto)
+        self.assertIn("loop-ctl armar", texto)
 
 
 class TestCli(unittest.TestCase):

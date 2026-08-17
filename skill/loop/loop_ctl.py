@@ -25,7 +25,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "li
 from diagnostico import (condicoes_de_fim,             # noqa: E402
                          portoes_de_inercia)
 from estado import (Loop, PADRAO, achar_raiz, agora,   # noqa: E402
-                    fora_da_janela, minutos_desde, parse_duracao)
+                    fora_da_janela, minutos_desde, objetivo_legivel,
+                    objetivo_para_exibir, parse_duracao)
 
 ESQUELETO_FILA = """# Fila do loop
 
@@ -68,8 +69,10 @@ def cmd_armar(args):
     # `"¨¨"` (mojibake, provavelmente o placeholder do SKILL.md copiado
     # literalmente) e o loop passou a anunciar "Objetivo do loop: ¨¨".
     # Recusar na porta é mais barato que propagar; vazio segue permitido de
-    # propósito (é a rodada sem objetivo declarado, que imprime "—").
-    if args.objetivo and not any(c.isalnum() for c in args.objetivo):
+    # propósito (é a rodada sem objetivo declarado, que imprime "—"). A régua é
+    # `objetivo_legivel`, a mesma que a exibição usa — porta e vitrine medindo
+    # diferente foi como o `¨¨` do EOP seguiu aparecendo depois desta guarda.
+    if args.objetivo and not objetivo_legivel(args.objetivo):
         print("erro: --objetivo %r não tem letra nem dígito — é pontuação ou "
               "mojibake." % args.objetivo)
         print("      Ele é reportado no STATUS.md e em toda parada do hook; "
@@ -94,7 +97,7 @@ def cmd_armar(args):
     )
     pend, feitos = loop.contagem_fila()
     print("loop armado em %s" % loop.dir)
-    print("  objetivo   : %s" % (st["objetivo"] or "—"))
+    print("  objetivo   : %s" % objetivo_para_exibir(st["objetivo"]))
     print("  fila       : %d pendente(s), %d feito(s)" % (pend, feitos))
     print("  fim por    : %s" % _fim_por(st, pend))
     print("  teto       : %d iterações · %d paradas sem progresso"
@@ -112,19 +115,24 @@ def cmd_armar(args):
 
 
 def _fim_por(st, pendentes):
-    """Todas as condições de fim ativas, na ordem em que o hook as testa."""
-    partes = []
-    if st.get("escopo_itens"):
-        partes.append("%d itens desta rodada" % st["escopo_itens"])
-    if st.get("escopo_ate"):
-        partes.append("item %r marcado" % st["escopo_ate"][:40])
+    """Todas as condições de fim ativas, na ordem em que o hook as testa.
+
+    A ordem é a de `condicoes_de_fim` — e era só o que a docstring dizia, não o
+    que o código fazia: escopo vinha primeiro e iterações por último, o inverso
+    da cadeia em dois pontos. Resumo que promete ordem e entrega outra é pior
+    que resumo sem ordem, porque quem lê tira conclusão de qual bate antes.
+    """
+    partes = ["%d iterações" % st.get("max_iteracoes", 0),
+              "fila zerada (%d pendente(s))" % pendentes]
     if st.get("janela"):
         partes.append("fora de %s%s" % (st["janela"],
                                         " (%s)" % st["dias"] if st.get("dias") else ""))
     if st.get("duracao_max_min"):
         partes.append("%dh%02d de relógio" % divmod(st["duracao_max_min"], 60))
-    partes.append("fila zerada (%d pendente(s))" % pendentes)
-    partes.append("%d iterações" % st.get("max_iteracoes", 0))
+    if st.get("escopo_itens"):
+        partes.append("%d itens desta rodada" % st["escopo_itens"])
+    if st.get("escopo_ate"):
+        partes.append("item %r marcado" % st["escopo_ate"][:40])
     return " · ".join(partes)
 
 
@@ -136,7 +144,7 @@ def cmd_status(args):
     st = loop.ler() or {}
     pend, feitos = loop.contagem_fila()
     print("ativo      : %s (fase %s)" % (st.get("ativo"), st.get("fase")))
-    print("objetivo   : %s" % (st.get("objetivo") or "—"))
+    print("objetivo   : %s" % objetivo_para_exibir(st.get("objetivo")))
     print("iteração   : %d / %d" % (st.get("iteracao", 0), st.get("max_iteracoes", 0)))
     print("fila       : %d pendente(s), %d feito(s)" % (pend, feitos))
     print("próximo    : %s" % (loop.proximo_item() or "—"))
@@ -263,6 +271,7 @@ def cmd_parar(args):
     st["ativo"] = False
     st["fase"] = "rodando"
     st["encerrado_por"] = args.motivo or "parada manual"
+    st["encerrado_detalhe"] = "pelo operador"
     st["encerrado_em"] = agora()
     loop.gravar(st)
     loop.gravar_status(st, st["encerrado_por"])
@@ -282,6 +291,7 @@ def cmd_retomar(args):
     st["fase"] = "rodando"
     st["sem_progresso"] = 0
     st["encerrado_por"] = None
+    st["encerrado_detalhe"] = None
     st["encerrado_em"] = None
     # Re-amarração (ADR-008, emenda de 17/08): o `session_id` da rodada anterior
     # não serve para a sessão de hoje, e mantê-lo faz o hook sair **em silêncio**

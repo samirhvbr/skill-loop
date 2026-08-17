@@ -53,6 +53,7 @@ PADRAO = {
     "colher_itens": True,
     "notificar": True,
     "encerrado_por": None,
+    "encerrado_detalhe": None,   # "22 item(ns) concluído(s)" — o que o motivo omite
     "encerrado_em": None,
 }
 
@@ -60,6 +61,44 @@ PADRAO = {
 def agora():
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
+
+# ── objetivo: uma régua só, na porta e na vitrine ───────────────────────────
+def objetivo_legivel(objetivo):
+    """O objetivo tem ao menos uma letra ou um dígito?
+
+    Vazio é legível por omissão: a rodada sem objetivo declarado é legítima e
+    imprime "—". O que esta régua recusa é o objetivo que **existe e não diz
+    nada** — pontuação solta, mojibake, placeholder copiado literalmente.
+    """
+    return bool(objetivo) and any(c.isalnum() for c in objetivo)
+
+
+def objetivo_para_exibir(objetivo, largura=None):
+    """O objetivo como ele deve aparecer — painel, `STATUS.md`, prompt do hook.
+
+    A guarda de `armar` recusa o ilegível na porta, mas ela nasceu em 17/08 —
+    **depois** de o `.loop/` do EOP já ter sido armado com `"¨¨"`. Estado gravado
+    antes de uma guarda não passa a obedecê-la retroativamente, e o painel seguiu
+    anunciando `¨¨` a cada leitura, de rodada em rodada. Guarda na entrada não
+    dispensa régua na saída: quem exibe também tem de saber recusar.
+
+    Não devolve `"—"` seco de propósito. `"—"` é o fato *"não declarou
+    objetivo"*, e trocar um fato pelo outro esconderia que existe lixo gravado no
+    estado — o operador ficaria sem saber que há o que consertar, nem com quê.
+    """
+    if not objetivo:
+        return "—"
+    if not objetivo_legivel(objetivo):
+        return ("— (ilegível no STATE.json: %r — rearme com `loop-ctl armar`)"
+                % objetivo[:24])
+    return objetivo[:largura] if largura else objetivo
+
+
+# O número de uma parada mora no NOME DO ARQUIVO — é o que sobrevive entre
+# rodadas. Aqui em cima, e não escondido na classe, porque quem *lê* a entry
+# (o painel) precisa da mesma régua de quem a *escreve* (o hook): foi lendo o
+# campo `n:` do front-matter que o painel de 17/08 mostrou `#4 #1 #2 #1`.
+NUM_DE_ENTRY = re.compile(r"^(\d{4})-")
 
 DIAS = ["seg", "ter", "qua", "qui", "sex", "sab", "dom"]
 
@@ -241,7 +280,7 @@ class Loop(object):
             f.write("- **Em execução desde:** %s\n" % st.get("armado_em", agora()))
             f.write("- **Iterações:** 0 de %d\n" % st.get("max_iteracoes", 0))
             f.write("- **Fila:** %d feito(s), %d pendente(s)\n" % (feitos, pend))
-            f.write("- **Objetivo:** %s\n" % (st.get("objetivo") or "—"))
+            f.write("- **Objetivo:** %s\n" % objetivo_para_exibir(st.get("objetivo")))
             f.write("\n> Rodada **em andamento** — o motivo do encerramento entra "
                     "aqui quando ela terminar.\n")
 
@@ -367,8 +406,6 @@ class Loop(object):
             f.write("\n".join(fm) + "\n".join(corpo) + "\n")
         return os.path.relpath(caminho, self.raiz)
 
-    _NUM_DE_ENTRY = re.compile(r"^(\d{4})-")
-
     def proximo_numero_de_entry(self):
         """O maior número de entry já gravado, mais um — **nunca** a iteração.
 
@@ -386,7 +423,7 @@ class Loop(object):
         maior = 0
         if os.path.isdir(self.entries):
             for nome in os.listdir(self.entries):
-                m = self._NUM_DE_ENTRY.match(nome)
+                m = NUM_DE_ENTRY.match(nome)
                 if m:
                     maior = max(maior, int(m.group(1)))
         return maior + 1
@@ -441,7 +478,7 @@ class Loop(object):
             if st.get("escopo_itens"):
                 f.write("- **Escopo da rodada:** %d de %d item(ns)\n"
                         % (feitos - st.get("feitos_ao_armar", 0), st["escopo_itens"]))
-            f.write("- **Objetivo:** %s\n" % (st.get("objetivo") or "—"))
+            f.write("- **Objetivo:** %s\n" % objetivo_para_exibir(st.get("objetivo")))
             if motivo == "fora da janela de trabalho" and st.get("janela"):
                 f.write("\n> A janela %s reabre no próximo dia útil configurado. "
                         "O loop **não** se rearma sozinho: retomar é um comando "
