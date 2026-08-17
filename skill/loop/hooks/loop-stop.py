@@ -181,8 +181,13 @@ def principal():
                                  "no transcript quando o hook leu; isto é resto "
                                  "de meio de raciocínio, não o relatório")
 
-    n = st.get("iteracao", 0) + 1
-    st["iteracao"] = n
+    # ITERAÇÃO e NÚMERO DE ENTRY são coisas diferentes, e eram a mesma.
+    # A iteração conta esta rodada (e zera na próxima); o número da entry
+    # identifica a parada para sempre, no INDEX e no ASSUMPTIONS. Enquanto os
+    # dois eram `iteracao + 1`, cada rodada nova renumerava do 0001 por cima da
+    # anterior — o `INDEX.md` acabou com `0001-DOC` e `0001-ASK`.
+    st["iteracao"] = iteracao = st.get("iteracao", 0) + 1
+    n = loop.proximo_numero_de_entry()
 
     impressao = loop.impressao()
     st["sem_progresso"] = (st.get("sem_progresso", 0) + 1
@@ -235,7 +240,7 @@ def principal():
                 "encerramento, o que avançou e o que ficou pendente.\n"
                 "2. Não continue nenhum item, não resuma o histórico no chat — "
                 "está tudo em `.loop/STATUS.md` e `.loop/INDEX.md`."
-                % (motivo, detalhe or "", n, feitos, pendentes)))
+                % (motivo, detalhe or "", iteracao, feitos, pendentes)))
         # Sem notificação não há turno seguinte para consumir a fase
         # "encerrando" — o loop precisa morrer aqui mesmo.
         st["ativo"] = False
@@ -244,7 +249,7 @@ def principal():
 
     loop.gravar(st)
     reason = _preencher(_template(), {
-        "iteracao": n,
+        "iteracao": iteracao,
         "max_iteracoes": st.get("max_iteracoes", 200),
         "kind": res.kind,
         "sinal": res.sinal,

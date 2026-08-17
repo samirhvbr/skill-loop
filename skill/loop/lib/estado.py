@@ -220,7 +220,30 @@ class Loop(object):
         # anteriores e o loop encerraria na primeira parada.
         st["feitos_ao_armar"] = self.contagem_fila()[1]
         self.gravar(st)
+        self._status_em_execucao(st)
         return st
+
+    def _status_em_execucao(self, st):
+        """O STATUS.md passa a falar da rodada CORRENTE já ao armar.
+
+        Antes ele só era escrito no fim, e o `iniciar()` não o tocava: armar uma
+        rodada nova deixava no disco o STATUS da anterior — "encerrado em
+        16/08, fila zerada" — enquanto o STATE.json dizia `ativo: true`. O
+        arquivo que se lê para saber *"o loop está rodando?"* respondia pela
+        rodada morta. É eco durando mais que a fonte, dentro do próprio medidor.
+
+        Sobrescrever é melhor que apagar: quem abre o arquivo quer uma resposta,
+        e "não existe" se confunde com "nunca rodou".
+        """
+        pend, feitos = self.contagem_fila()
+        with open(self.p("STATUS.md"), "w", encoding="utf-8") as f:
+            f.write("# Status do loop\n\n")
+            f.write("- **Em execução desde:** %s\n" % st.get("armado_em", agora()))
+            f.write("- **Iterações:** 0 de %d\n" % st.get("max_iteracoes", 0))
+            f.write("- **Fila:** %d feito(s), %d pendente(s)\n" % (feitos, pend))
+            f.write("- **Objetivo:** %s\n" % (st.get("objetivo") or "—"))
+            f.write("\n> Rodada **em andamento** — o motivo do encerramento entra "
+                    "aqui quando ela terminar.\n")
 
     # ── fila ────────────────────────────────────────────────────────────────
     _PEND = re.compile(r"^(\s*)- \[ \]\s+(.+?)\s*$")
@@ -343,6 +366,30 @@ class Loop(object):
         with open(caminho, "w", encoding="utf-8") as f:
             f.write("\n".join(fm) + "\n".join(corpo) + "\n")
         return os.path.relpath(caminho, self.raiz)
+
+    _NUM_DE_ENTRY = re.compile(r"^(\d{4})-")
+
+    def proximo_numero_de_entry(self):
+        """O maior número de entry já gravado, mais um — **nunca** a iteração.
+
+        Os dois eram a mesma coisa (`n = iteracao + 1`) e não são: `iniciar()`
+        zera a iteração a cada rodada, então a rodada seguinte renumerava por
+        cima da anterior. O resultado apareceu no `INDEX.md` como `0001-DOC` e
+        `0001-ASK` — **um número nomeando duas paradas**, e o `#0001` do
+        `ASSUMPTIONS.md` passando a ser ambíguo.
+
+        É a mesma classe que este ecossistema já pagou com o código `S11` do
+        docs-lint (dois normas com o mesmo número, resolvido renumerando): barato
+        agora, caro depois de cem entries. A verdade mora no DISCO, que é o que
+        sobrevive entre rodadas — não no contador em memória de uma delas.
+        """
+        maior = 0
+        if os.path.isdir(self.entries):
+            for nome in os.listdir(self.entries):
+                m = self._NUM_DE_ENTRY.match(nome)
+                if m:
+                    maior = max(maior, int(m.group(1)))
+        return maior + 1
 
     def indexar(self, n, res, caminho, decisao, item):
         # `caminho` vem relativo à raiz (".loop/entries/x.md"); o INDEX.md mora

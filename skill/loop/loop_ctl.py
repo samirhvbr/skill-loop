@@ -62,6 +62,21 @@ def cmd_armar(args):
         print("erro: --duracao inválida (%r). Use 6h, 90m, 2h30." % args.duracao)
         return 2
 
+    # O objetivo é REPORTADO — vai para o STATUS.md e para o prompt que o hook
+    # devolve a cada parada. Objetivo ilegível não fica ilegível só uma vez:
+    # fica em toda iteração, por até `--max` delas. Uma rodada real armou com
+    # `"¨¨"` (mojibake, provavelmente o placeholder do SKILL.md copiado
+    # literalmente) e o loop passou a anunciar "Objetivo do loop: ¨¨".
+    # Recusar na porta é mais barato que propagar; vazio segue permitido de
+    # propósito (é a rodada sem objetivo declarado, que imprime "—").
+    if args.objetivo and not any(c.isalnum() for c in args.objetivo):
+        print("erro: --objetivo %r não tem letra nem dígito — é pontuação ou "
+              "mojibake." % args.objetivo)
+        print("      Ele é reportado no STATUS.md e em toda parada do hook; "
+              "ilegível aqui é ilegível %d vezes." % args.max)
+        print("      Escreva uma linha de verdade, ou omita o argumento.")
+        return 2
+
     st = loop.iniciar(
         objetivo=args.objetivo or "",
         session_id=args.sessao,
