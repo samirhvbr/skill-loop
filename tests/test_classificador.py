@@ -189,6 +189,183 @@ class TestColheita(unittest.TestCase):
         self.assertEqual(len(r.itens), 3)
         self.assertIn("timeout do retry", r.itens[1])
 
+    def test_handoff_que_descreve_estado_para_o_loop_mas_nao_enche_a_fila(self):
+        """QUINTA ocorrência — e a mensagem que a causou DESCREVIA o defeito.
+
+        `"apertá-los continua sendo sua decisão"` casou
+        `(sua|tua) (decisão|chamada|escolha)`, virou ASK e colheu um item — o
+        custo que a própria frase chamava de hipotético.
+
+        As duas metades do sinal têm direção de erro OPOSTA, e é por isso que
+        elas se separam: parar demais custa uma interrupção (seguro); encher a
+        fila custa trabalho fabricado que alguém apaga à mão (inseguro). O
+        `ASK` fica, a colheita sai.
+        """
+        r = c.classificar(
+            "Rodada fechada, 186 testes verdes.\n\n"
+            "A HANDOFF ainda tem dois falsos positivos medidos, e apertá-los "
+            "continua sendo sua decisão, porque troca falha segura por insegura.")
+        self.assertEqual(r.kind, "ASK", "o loop deve seguir PARANDO — é o lado seguro")
+        self.assertEqual(r.itens, [], "mas relatar de quem é a decisão não é item")
+
+    def test_handoff_que_pede_acao_continua_enchendo_a_fila(self):
+        """O aperto não pode matar o sinal legítimo: pedido continua colhendo."""
+        r = c.classificar(
+            "Fechei a fase 2.\n\n"
+            "Fica do teu lado:\n"
+            "- revisar o contrato do webhook\n"
+            "- decidir o timeout do retry")
+        self.assertEqual(r.kind, "ASK")
+        self.assertEqual(len(r.itens), 2)
+
+    def test_lista_de_trabalho_FEITO_no_fecho_nao_vira_fila(self):
+        """QUARTA colheita errada da mesma rodada, e por um ramo novo.
+
+        O ramo de LISTA do `colher_itens` disparava em qualquer bullet do
+        fecho, sem exigir sinal nenhum — enquanto o ramo de PROSA logo abaixo
+        sempre exigiu handoff. A assimetria era o defeito: um "Saldo da
+        rodada:" com seis marcadores de trabalho **feito** virou seis itens de
+        fila, que alguém teve de apagar à mão.
+
+        Nenhum discriminador por CONTEÚDO do item resolveria — medido em 17/08:
+        a lista `RELATO` casa zero tanto nos seis relatos quanto nos seis
+        pendentes de verdade. O que separa é o parágrafo que INTRODUZ a lista.
+        """
+        r = c.classificar(
+            "Rodada fechada.\n\n"
+            "**Saldo da rodada:**\n"
+            "- dois instrumentos que não provavam que rodavam agora provam\n"
+            "- avisos 17 → 8, cada um com dono declarado\n"
+            "- um bloco morto na triagem, que evitou uma guarda sem sinal")
+        self.assertEqual(r.itens, [], "relato em bullets não é fila")
+
+    def test_lista_de_trabalho_PENDENTE_no_fecho_continua_colhendo(self):
+        """O aperto não pode matar o uso legítimo, que é o irmão exato."""
+        r = c.classificar(
+            "Rodada fechada.\n\n"
+            "Fica do teu lado:\n"
+            "- revisar o contrato do webhook\n"
+            "- decidir o timeout do retry")
+        self.assertEqual(len(r.itens), 2)
+
+    # ── a catraca: forma do padrão, não cobertura ────────────────────────
+    #
+    # Três marcadores da DECLARADO_PENDENTE morderam em 17/08 — `próxima
+    # rodada`, `próximo ciclo`, `não coberto` — e os três foram consertados um
+    # a um. Conserto sem catraca volta no próximo padrão que alguém escrever, e
+    # esta lista é a que alimenta a FILA DE TRABALHO: um marcador que casa
+    # narrativa não gera aviso, gera item que um humano precisa reconhecer como
+    # prosa e apagar à mão.
+
+    #: Verbos e locuções de ADIAMENTO. Lista explícita de propósito — regex
+    #: adivinhando "o que parece verbo" foi o erro que produziu quatro medições
+    #: inúteis no EOP no mesmo dia. O que não estiver aqui não conta.
+    #:
+    #: Os tokens são comparados contra a FONTE do padrão, que é regex — por isso
+    #: entram em pedaço curto (`declarado`, não `declarado e não feito`): o
+    #: padrão real escreve `n[ãa]o`, e a locução inteira nunca casaria. O
+    #: primeiro corte deste teste reprovou justamente o `declarado e não feito`,
+    #: que é um dos marcadores BONS.
+    VERBOS_DE_ADIAMENTO = (
+        "fica", "ficam", "ficou", "ficaram", "vai", "vão", "deixo", "deixamos",
+        "adiad", "entra", "entram", "sobra", "sobram", "resta", "restam",
+        "falta", "faltam", "pend", "declarado", "candidato",
+        "fora de", "fora do", "fora deste", "not done", "left", "follow",
+        "next", "out of scope",
+    )
+
+    def test_todo_marcador_de_pendencia_tem_verbo_ou_exige_pontuacao(self):
+        """Padrão NU é o modo de falha, e ele reincidiu três vezes em 17/08.
+
+        A regra que os doze marcadores bons cumprem: ou o padrão carrega verbo
+        de adiamento (`fica para a próxima`, `ficou de fora`), ou exige a
+        pontuação que ANUNCIA itens (`:`). Sintagma solto casa narrativa — e
+        como o `colher_declarados` pega a primeira frase do parágrafo quando
+        não há lista, o item que nasce **nem é a frase que casou**.
+        """
+        nus = [p for p in c.DECLARADO_PENDENTE
+               if not self._tem_verbo(p) and not self._exige_dois_pontos(p)]
+        self.assertEqual(
+            nus, [],
+            "marcador sem verbo de adiamento e sem `:` casa prosa e vira item "
+            "de fila: acrescente o verbo, exija `\\s*:`, ou entre na lista "
+            "VERBOS_DE_ADIAMENTO com o motivo")
+
+    def test_a_catraca_reprova_o_nu_e_absolve_os_dois_formatos_bons(self):
+        """PROVA DE EXECUÇÃO da catraca acima, nos dois sentidos."""
+        nu = r"\bsegunda etapa\b"
+        com_verbo = r"\bfica para a segunda etapa\b"
+        com_pontuacao = r"\bsegunda etapa\s*:"
+
+        self.assertFalse(self._tem_verbo(nu) or self._exige_dois_pontos(nu),
+                         "o sintagma nu tem de ser reprovado")
+        self.assertTrue(self._tem_verbo(com_verbo), "verbo de adiamento absolve")
+        self.assertTrue(self._exige_dois_pontos(com_pontuacao),
+                        "exigir `:` absolve")
+        self.assertFalse(self._exige_dois_pontos(r"\bfoo\b:bar"),
+                         "`:` no meio do padrão não é exigência de anúncio — só "
+                         "conta no FIM, que é onde o cabeçalho o põe")
+
+    @classmethod
+    def _tem_verbo(cls, padrao):
+        alvo = padrao.lower()
+        return any(v in alvo for v in cls.VERBOS_DE_ADIAMENTO)
+
+    @staticmethod
+    def _exige_dois_pontos(padrao):
+        return padrao.rstrip().endswith(":")
+
+    def test_narrativa_sobre_a_proxima_rodada_nao_vira_item(self):
+        """O sintagma nu era o gatilho: TRÊS colheitas erradas em 17/08.
+
+        A frase abaixo é a última linha de um relatório de fecho — ela fala
+        sobre para que serve um REGISTRO, não declara trabalho. Sem os
+        dois-pontos, `próxima rodada` é substantivo de narrativa, e o
+        `colher_declarados` (que varre o texto inteiro, não só o fecho) puxava
+        a primeira frase do parágrafo para a fila. O item que nasceu daí —
+        "Proxy de palavra-chave errou em três dessas medições..." — foi para o
+        QUEUE.md do EOP e teve de ser removido à mão.
+        """
+        r = c.classificar(
+            "Fechei a conferência, 475 testes verdes.\n\n"
+            "Proxy de palavra-chave errou em três dessas medições e no primeiro "
+            "corte de uma quarta. A tabela das sete ficou no QUEUE.md para a "
+            "próxima rodada não repetir a varredura.")
+        self.assertEqual(r.kind, "DOC")
+        self.assertEqual(r.itens, [], "narrativa não é declaração de pendência")
+
+    def test_proxima_rodada_com_dois_pontos_continua_colhendo(self):
+        """O aperto não pode matar o uso legítimo — que é ANUNCIAR itens."""
+        r = c.classificar(
+            "Entreguei o parser.\n\n"
+            "Na próxima rodada:\n"
+            "- extrair a máquina de estados da C6\n"
+            "- cobrir a S4 com entrada sintética")
+        self.assertEqual(len(r.itens), 2)
+
+    def test_nao_coberto_como_adjetivo_de_narrativa_nao_vira_item(self):
+        """O terceiro sintagma nu da lista, achado varrendo os outros dois.
+
+        `não coberto` descreve ALCANCE ("o REVOKE não cobre o UPDATE"), e a
+        frase inteira virava item. É o mesmo formato de `próxima rodada` e
+        `próximo ciclo` — substantivo/adjetivo sem verbo de adiamento —, e os
+        três eram os únicos assim na lista que alimenta a fila.
+        """
+        r = c.classificar(
+            "Fechei a guarda, 475 testes verdes.\n\n"
+            "O que o REVOKE não cobre é o UPDATE no lançamento, e esse caminho "
+            "ficou não coberto pela imutabilidade do banco — é a metade que a "
+            "cadeia de hash resolve.")
+        self.assertEqual(r.itens, [], "alcance de um controle não é pendência")
+
+    def test_nao_coberto_como_cabecalho_continua_colhendo(self):
+        r = c.classificar(
+            "Entreguei a fase 2.\n\n"
+            "Não coberto:\n"
+            "- o caminho de estorno sob concorrência\n"
+            "- a régua com feriado bancário")
+        self.assertEqual(len(r.itens), 2)
+
     def test_declarado_pendente_em_lista(self):
         r = c.classificar(
             "Entreguei a fase 2, 90 testes ok.\n\n"

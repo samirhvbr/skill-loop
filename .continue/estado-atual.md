@@ -75,6 +75,35 @@ precisa de trava, e o teto da flag nasceria medido em vez de inventado.
 alternativa descartada hoje foi justamente desenhar `--reabastecer N` antes de
 saber como o padrão se comporta.
 
+### Resultado parcial (17/08, 13:02 — rodada ainda viva)
+
+**O padrão se sustenta.** Armada 10:40, o item entrou 11:19 e o `retomar` 11:21.
+Da parada `#6` à `#11`:
+
+| Medida | Valor |
+|---|---|
+| Paradas desde o `retomar` | 6 (`#6`…`#11`), **todas DOC/relato, todas `continuou`** |
+| Reabastecimentos | **6 concluídos**, 1 pendente — o item se reproduziu toda vez |
+| Fila | 22 → **53 itens** (48 feitos, 5 pendentes) |
+| Intervalo entre paradas | 25 · 14 · 10 · 10 · 7 min |
+| Condição que bate primeiro | **relógio** — pela primeira vez em três rodadas |
+
+Zero ASK e zero encerramentos em 6 paradas: nenhuma das duas mortes por
+`fila zerada` das rodadas anteriores se repetiu. O que ainda não foi observado é
+o comportamento **no fim** — se o relógio bate às 14:40 com a fila cheia, o
+encerramento por tempo é o primeiro do projeto e vale medir.
+
+⚠️ **A observar:** `sem progresso` marcou **1/3**. Se chegar a 3 o loop encerra
+por loop degenerado. Turno de reabastecimento mexe na contagem da fila, que entra
+na impressão digital, então não deveria acumular — mas acumulou uma vez, e o
+motivo não foi apurado.
+
+⚠️ **Ainda não medido:** se o trabalho puxado da documentação está **no alvo**.
+Os 6 relatos foram classificados DOC e arquivados, mas ninguém leu o conteúdo
+para dizer se a fila que o próprio loop escreveu é boa. É o risco que o
+README nomeia ("fila ruim = loop ruim, e o hook não detecta isso"), e agora quem
+escreve a fila é o loop.
+
 ## O que precisa do Samir
 
 1. **Rodar a primeira vez** (F2). Sugestão: um repositório de trabalho real, com

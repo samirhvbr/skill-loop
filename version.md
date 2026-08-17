@@ -1,6 +1,6 @@
 # Versão — skill-LOOP
 
-**Versão atual:** `0.2.3`
+**Versão atual:** `0.2.4`
 
 > Este arquivo é a **fonte da verdade** da versão do projeto. Qualquer lugar que
 > precise exibir ou reportar a versão extrai o **primeiro número semver (`X.Y.Z`)**
@@ -60,6 +60,86 @@ da mesma entrega repetem a versão.
 ---
 
 ## 3. Changelog
+
+### `0.2.4` — 2026-08-17 — o marcador nu, e quando cada parada foi
+
+> Duas entregas na mesma árvore, e o registro diz de quem é cada uma: o conserto
+> do classificador foi feito **pelo agente do EOP**, dentro da rodada de loop, e
+> o painel por esta sessão. Estão num commit só porque assim aconteceram.
+
+#### O classificador colhia prosa — achado em operação, pelo próprio loop
+
+Primeira vez que o produto se auditou **rodando**. A colheita errou três vezes na
+rodada de 17/08; na terceira reproduziu de primeira, e a causa não era falta de
+teste — a suíte já tinha nove asserções negativas dedicadas a não colher prosa. A
+causa era a **forma do padrão**.
+
+- **Marcador nu** — sintagma sem verbo de adiamento — casa narrativa. *"a tabela
+  ficou no QUEUE.md para a próxima rodada não repetir a varredura"* fala sobre
+  para que serve um registro, e virou item de fila. Agravante: como o
+  `colher_declarados` pega a primeira frase do parágrafo quando não há lista, **o
+  item que nascia nem era a frase que casou**.
+- A varredura das cinco listas achou **três** nus na que alimenta a fila:
+  `próxima rodada`, `próximo ciclo` e `não coberto` — o terceiro descoberto ao
+  consertar os dois primeiros, e confirmado com prosa real antes da mudança
+  (*"esse caminho ficou não coberto pela imutabilidade do banco"*). Os outros
+  doze padrões carregam verbo e nunca morderam.
+- Os três passam a exigir `\s*:`. Com dois-pontos a expressão **anuncia** itens,
+  que é o único uso que o colhedor sabe ler.
+- **Catraca meta:** um teste varre `DECLARADO_PENDENTE` inteira e reprova
+  marcador que não tenha verbo de adiamento nem exija `:` — com prova de execução
+  nos dois sentidos, para a catraca não absolver por engano.
+
+#### O painel: quando cada parada foi, e quanto tempo levou
+
+Pedido do Samir durante a rodada, e o defeito é o mesmo que o enganou de manhã: o
+painel mostrou `09:32 · 09:03 · 21:19 · 20:24` nas últimas paradas, e as duas de
+baixo eram do **dia anterior** — nada na tela dizia isso. Num registro que
+atravessa a meia-noite, `hh:mm` sozinho engana com cara de dado.
+
+Pedido do Samir durante a terceira rodada, e o defeito é o mesmo que o enganou de
+manhã: o painel mostrou `09:32 · 09:03 · 21:19 · 20:24` nas últimas paradas, e as
+duas de baixo eram do **dia anterior** — nada na tela dizia isso. Num registro
+que atravessa a meia-noite, `hh:mm` sozinho engana com cara de dado.
+
+- **`Últimas paradas` carrega `DD/MM/YYYY-hh:mm`** (`carimbo()`). Carimbo que não
+  casa com o formato ISO devolve o texto cru truncado em vez de data inventada —
+  o painel pode não saber ler um carimbo, não pode fabricar um.
+- **O cabeçalho ganha a data** pelo `--uma-vez >> registro.log`: num arquivo que
+  acumula por dias, `12:57:11` sozinho não diz de quando é.
+- **Cada parada mostra o intervalo desde a anterior** (`+12min`). A data responde
+  *quando*; o intervalo responde *quanto tempo levou* — e era a informação que o
+  painel nunca teve, não a que a data substituiu. É também o "trabalho por
+  iteração" que a P-05 pede e que nenhuma rodada tinha medido.
+  `ultimas_paradas` passa a ler **uma parada a mais** do que exibe: o intervalo
+  da linha mais antiga da tela depende da anterior a ela, que já saiu da janela.
+- O intervalo é rotulado como **fato medido, não tempo de trabalho**: entre a
+  `#5` e a `#6` de 17/08 há meia hora em que o loop estava encerrado esperando um
+  `retomar`. O painel mede o relógio; inferir produtividade dali é de quem lê.
+
+Mudança só em `loop_watch.py` — leitura pura, fora do caminho do hook — porque a
+rodada do EOP estava **rodando** na hora, e o hook roda do symlink: erro em
+`lib/` ou no hook faria ele sair fail-open e travaria a rodada no meio.
+
+**Testes: 172 → 184.** Seis do painel, seis do classificador (quatro de
+regressão, dois por marcador nos dois sentidos, mais a catraca meta e a prova de
+execução dela).
+
+| Controle desligado | Testes que caem |
+|---|---|
+| painel deixa de calcular o intervalo entre paradas | 2 |
+| carimbo volta a ser só `hh:mm` (`ts[11:16]`) | 1 |
+| não lê a parada extra — linha mais antiga fica sem intervalo | 1 |
+| marcador volta a ser nu (sem `\s*:`) | ⛔ **não medido** |
+
+⛔ A mutação dos três marcadores **não foi rodada**: o agente do EOP estava
+editando `classificador.py` no mesmo minuto, e mutar-e-restaurar teria apagado o
+que ele gravasse no meio. A catraca meta cobre a **forma** do padrão; falta o
+número de testes que cada marcador derruba. Rodar quando a rodada encerrar.
+
+⛔ **Falta o mesmo conserto no `INDEX.md`**, que é o registro durável e hoje não
+tem timestamp **nenhum** — nem hora. Adiado de propósito: mexe em
+`estado.py::indexar`, que o hook consome, e a rodada estava viva.
 
 ### `0.2.3` — 2026-08-17 — a pergunta não era item, e o painel não era testemunha
 

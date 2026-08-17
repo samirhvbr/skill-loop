@@ -101,12 +101,25 @@ DECLARADO_PENDENTE = [
     r"\bdeclarado e n[ãa]o feito\b",
     r"\bfica (?:nomeado|para a pr[óo]xima|de fora|pendente|para depois)\b",
     r"\bcandidato natural\b",
-    r"\bpr[óo]xima rodada\b",
-    r"\bpr[óo]ximo ciclo\b",
+    # Os DOIS-PONTOS são o discriminador, e custaram três colheitas erradas
+    # (17/08). "próxima rodada" solto é substantivo de narrativa — *"fica
+    # registrado para a próxima rodada não repetir a varredura"* fala sobre um
+    # REGISTRO, não declara trabalho —, e foi assim que uma frase de relatório
+    # virou linha de fila. Com `:` a expressão ANUNCIA itens, que é o único uso
+    # que o `colher_declarados` sabe ler. Os irmãos desta lista já carregam
+    # verbo de adiamento (`fica para a próxima`, `ficou de fora`); estes dois
+    # eram os únicos sintagmas nus.
+    r"\bpr[óo]xima rodada\s*:",
+    r"\bpr[óo]ximo ciclo\s*:",
     r"\bfora deste commit\b",
     r"\bfora do escopo de hoje\b",
     r"\bficou de fora\b",
-    r"\bn[ãa]o coberto\b",
+    # Mesmo modo de falha dos dois acima, achado na varredura que os
+    # consertou (17/08): "não coberto" é adjetivo de narrativa —
+    # *"esse caminho ficou NÃO COBERTO pela imutabilidade do banco"* fala do
+    # alcance de um REVOKE, não declara trabalho, e virava item com a frase
+    # inteira junto. Com `:` é cabeçalho de seção, que é o uso legítimo.
+    r"\bn[ãa]o coberto\s*:",
     r"\bpend[êe]ncia(?:s)? (?:declarada|conhecida|aberta)",
     r"\bnot done\b",
     r"\bleft undone\b",
@@ -237,6 +250,28 @@ def _split_topo(texto):
     return [x.strip(" .;,") for x in itens if len(x.strip(" .;,")) >= 4]
 
 
+#: Padrões do HANDOFF que descrevem um ESTADO, não pedem uma ação.
+#:
+#: Eles continuam valendo para CLASSIFICAR (a mensagem vira `ASK` e o loop
+#: para): errar para o lado de parar demais custa uma interrupção, e essa é a
+#: direção segura. O que eles deixam de fazer é **alimentar a fila** — porque
+#: aí a direção do erro se inverte: item fabricado é trabalho que alguém tem de
+#: reconhecer como prosa e apagar à mão.
+#:
+#: Medido em 17/08 com prosa real: *"é **sua decisão**, e está registrada na
+#: fila com destino e gatilho"* e *"**antes de prosseguir** com a extração, medi
+#: o custo"* — as duas relatam, nenhuma pede. E a prova final foi a mensagem
+#: que DESCREVIA este defeito: ela casou o primeiro padrão, virou ASK e colheu
+#: um item, que é exatamente o custo que ela dizia ser hipotético.
+#:
+#: O discriminador honesto seria o tempo do verbo seguinte (*"medi"* ×
+#: *"preciso"*), e isso não cabe em regex. Separar os dois usos do sinal cabe.
+HANDOFF_QUE_NAO_ANUNCIA_TRABALHO = (
+    r"\b(?:sua|tua) (?:decis[ãa]o|chamada|escolha)\b",
+    r"\bantes de (?:prosseguir|seguir|continuar|avan[çc]ar)\b",
+)
+
+
 def colher_itens(fecho):
     """Extrai candidatos a item de fila do fecho.
 
@@ -247,14 +282,34 @@ def colher_itens(fecho):
     """
     itens = []
     for p in fecho:
+        alvo = _norm(p)
+        # só os handoffs que ANUNCIAM trabalho contam para colher; os que
+        # descrevem estado seguem valendo para classificar (ver o bloco acima)
+        handoff = any(re.search(h, alvo) for h in HANDOFF
+                      if h not in HANDOFF_QUE_NAO_ANUNCIA_TRABALHO)
+        # a LISTA aceita os dois sinais; a PROSA continua só com handoff, como
+        # sempre foi — alargar o ramo de prosa aqui seria consertar um excesso
+        # criando outro, e o `colher_declarados` já cobre a via DECLARADO
+        anuncia_pendencia = handoff \
+            or any(re.search(d, alvo) for d in DECLARADO_PENDENTE)
         linhas = p.split("\n")
         de_lista = [m.group(1).strip() for m in
                     (_ITEM_LISTA.match(l) for l in linhas) if m]
         if de_lista:
-            itens.extend(de_lista)
+            # A LISTA precisa do mesmo sinal que a prosa — 17/08, quarta
+            # colheita errada da mesma rodada. O ramo de lista disparava em
+            # QUALQUER bullet do fecho, sem exigir nada: um "**Saldo da
+            # rodada:**" com seis marcadores de trabalho FEITO virou seis itens
+            # de fila. O ramo de prosa logo abaixo sempre foi conservador
+            # (exige handoff + `:`); a assimetria entre os dois é que era o
+            # defeito, e nenhum discriminador por conteúdo do item resolve —
+            # medido: `RELATO` casa ZERO tanto nos seis relatos quanto nos seis
+            # pendentes de verdade. O que separa é o parágrafo que INTRODUZ a
+            # lista, e ele já tem marcador para isso.
+            if anuncia_pendencia:
+                itens.extend(de_lista)
             continue
-        alvo = _norm(p)
-        if not any(re.search(h, alvo) for h in HANDOFF):
+        if not handoff:
             continue
         if ":" not in p:
             continue

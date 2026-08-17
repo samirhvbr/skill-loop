@@ -23,6 +23,7 @@ import os
 import re
 import sys
 import time
+from datetime import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "lib"))
 
@@ -54,6 +55,27 @@ def dur(minutos):
     return "%dh%02d" % divmod(m, 60) if m >= 60 else "%dmin" % m
 
 
+_ISO = re.compile(r"^(\d{4})-(\d{2})-(\d{2})T(\d{2}:\d{2})")
+
+
+def carimbo(ts):
+    """`2026-08-17T12:56:03-03:00` → `17/08/2026-12:56`.
+
+    O painel mostrava só `hh:mm`. Em 17/08 as quatro últimas paradas saíram como
+    `09:32 · 09:03 · 21:19 · 20:24` — as duas de baixo eram do **dia anterior** e
+    nada na tela dizia isso. Hora sem data, num registro que atravessa a
+    meia-noite, é um número que parece informação.
+
+    Formato malformado devolve o texto cru truncado em vez de data inventada: o
+    painel pode não saber ler um carimbo, mas não pode fabricar um.
+    """
+    m = _ISO.match(ts or "")
+    if not m:
+        return (ts or "?")[:16]
+    ano, mes, dia, hm = m.groups()
+    return "%s/%s/%s-%s" % (dia, mes, ano, hm)
+
+
 def barra(feitos, total, largura=22):
     if total <= 0:
         return "·" * largura
@@ -65,9 +87,22 @@ def barra(feitos, total, largura=22):
 _CAMPO = re.compile(r"^(\w+):\s*(.*)$")
 
 
-def ultimas_paradas(loop, quantas=4):
+def _minutos_entre(antes, depois):
+    """Minutos entre dois carimbos ISO, ou `None` se algum não der para ler."""
     try:
-        nomes = sorted(os.listdir(loop.entries))[-quantas:]
+        return (datetime.fromisoformat(depois)
+                - datetime.fromisoformat(antes)).total_seconds() / 60.0
+    except (ValueError, TypeError):
+        return None
+
+
+def ultimas_paradas(loop, quantas=4):
+    # Lê uma parada A MAIS do que vai mostrar: o intervalo da linha mais antiga
+    # da tela precisa da anterior a ela, que já saiu da janela. Sem isso a
+    # primeira linha nunca teria duração, justamente a que o operador olha
+    # quando quer saber "quanto tempo faz que isso começou".
+    try:
+        nomes = sorted(os.listdir(loop.entries))[-(quantas + 1):]
     except (IOError, OSError):
         return []
     out = []
@@ -97,7 +132,15 @@ def ultimas_paradas(loop, quantas=4):
         if num:
             dados["n"] = str(int(num.group(1)))
         out.append(dados)
-    return out
+    # `intervalo` é o tempo entre uma parada e a anterior — **fato medido**, não
+    # "tempo de trabalho": o agente pode ter ficado esperando alguém digitar
+    # entre as duas, e foi o que aconteceu entre a #5 e a #6 em 17/08 (o hook
+    # tinha encerrado e o `retomar` veio meia hora depois). O painel mede o
+    # relógio; quem infere produtividade a partir dele é quem lê.
+    for i, d in enumerate(out):
+        d["intervalo"] = (None if i == 0 else
+                          _minutos_entre(out[i - 1].get("ts"), d.get("ts")))
+    return out[-quantas:]
 
 
 # ── render ──────────────────────────────────────────────────────────────────
@@ -210,8 +253,11 @@ def render(loop, st, anterior):
         cor, estado = C.VERDE, "RODANDO"
 
     L = []
+    # A data entra também no cabeçalho por causa do `--uma-vez >> registro.log`:
+    # num arquivo que acumula por dias, `12:57:11` sozinho não diz de quando é.
     L.append("%s%s╭─ loop-work · %s ─ %s%s" % (
-        C.NEG, C.AZUL, os.path.basename(loop.raiz), time.strftime("%H:%M:%S"), C.RESET))
+        C.NEG, C.AZUL, os.path.basename(loop.raiz),
+        time.strftime("%d/%m/%Y-%H:%M:%S"), C.RESET))
     L.append("  %s%s%s   iteração %d/%d"
              % (cor + C.NEG, estado, C.RESET, it, st.get("max_iteracoes", 0)))
     # O painel dizia "PARADO" e o operador lia "está entre duas iterações".
@@ -284,9 +330,12 @@ def render(loop, st, anterior):
                 aviso = "  %s⚠ fecho parcial%s" % (C.VERM, C.RESET)
             elif k == "ASK":
                 aviso = "  %s⚠ premissa registrada%s" % (C.AMAR, C.RESET)
-            L.append("    #%-5s %s%-4s%s %-16s %-22s %s%s"
+            gap = p.get("intervalo")
+            desde = "" if gap is None else "  %s+%s%s" % (
+                C.DIM, "<1min" if gap < 1 else dur(gap), C.RESET)
+            L.append("    #%-5s %s%-4s%s %-16s %-22s %s%s%s"
                      % (p.get("n", "?"), cor_k, k, C.RESET, p.get("sinal", "")[:16],
-                        p.get("decisao", "")[:22], (p.get("ts", "")[11:16]), aviso))
+                        p.get("decisao", "")[:22], carimbo(p.get("ts")), desde, aviso))
 
     if anterior:
         d_it = it - anterior["it"]

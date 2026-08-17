@@ -279,6 +279,37 @@ class TestRender(unittest.TestCase):
         self.assertIn("#3", texto)
         self.assertNotIn("#1     ASK", texto)
 
+    def test_parada_carrega_a_data_e_nao_so_a_hora(self):
+        # Em 17/08 o painel mostrou `09:32 · 09:03 · 21:19 · 20:24` e as duas
+        # últimas eram de ONTEM — nada na tela dizia isso. Mutação: voltar o
+        # `ts[11:16]` e a data some, com a hora parecendo a mesma jornada.
+        self.entry(1, "DOC")            # ts 2026-08-16T21:01
+        texto, _ = self.render()
+        self.assertIn("16/08/2026-21:01", texto)
+        self.assertIn("─ %s-" % __import__("time").strftime("%d/%m/%Y"), texto)
+
+    def test_parada_mostra_quanto_tempo_desde_a_anterior(self):
+        # A data responde "quando"; o intervalo responde "quanto tempo levou".
+        # Mutação: parar de calcular `intervalo` e o `+Nmin` some da tela.
+        self.entry(1, "DOC")        # ts 21:01
+        self.entry(2, "DOC")        # ts 21:02
+        texto, _ = self.render()
+        self.assertIn("+1min", texto)
+
+    def test_linha_mais_antiga_da_tela_tambem_tem_intervalo(self):
+        # `ultimas_paradas` lê uma parada a mais do que mostra: sem isso a
+        # primeira linha visível nunca teria duração.
+        for n in range(1, 7):
+            self.entry(n, "DOC")
+        paradas = lw.ultimas_paradas(self.loop, quantas=4)
+        self.assertEqual(len(paradas), 4)
+        self.assertEqual(paradas[0]["n"], "3")
+        self.assertIsNotNone(paradas[0]["intervalo"])
+
+    def test_intervalo_ilegivel_nao_vira_numero(self):
+        self.assertIsNone(lw._minutos_entre(None, "2026-08-17T12:00:00-03:00"))
+        self.assertIsNone(lw._minutos_entre("ontem", "2026-08-17T12:00:00-03:00"))
+
     def test_objetivo_ilegivel_nao_passa_na_vitrine(self):
         # `"¨¨"` foi armado no EOP antes de a guarda de `armar` existir. Estado
         # gravado antes de uma guarda não passa a obedecê-la — e o painel seguia
@@ -331,6 +362,16 @@ class TestFormatacao(unittest.TestCase):
         self.assertEqual(lw.dur(25), "25min")
         self.assertEqual(lw.dur(90), "1h30")
         self.assertEqual(lw.dur(360), "6h00")
+
+    def test_carimbo(self):
+        self.assertEqual(lw.carimbo("2026-08-17T12:56:03-03:00"), "17/08/2026-12:56")
+        self.assertEqual(lw.carimbo("2026-08-16T21:19:22-03:00"), "16/08/2026-21:19")
+
+    def test_carimbo_nao_inventa_data(self):
+        # Painel pode não saber ler um carimbo; não pode fabricar um.
+        self.assertEqual(lw.carimbo(None), "?")
+        self.assertEqual(lw.carimbo(""), "?")
+        self.assertEqual(lw.carimbo("ontem de noite"), "ontem de noite")
 
     def test_barra(self):
         self.assertEqual(lw.barra(0, 4, 8), "░" * 8)
