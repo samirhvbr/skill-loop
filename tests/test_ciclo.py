@@ -87,6 +87,10 @@ class Base(unittest.TestCase):
             f.write("\n".join(linhas) + "\n")
         return caminho
 
+    def zerar_a_fila(self):
+        with open(self.loop.p("QUEUE.md"), "w", encoding="utf-8") as f:
+            f.write("# Fila\n\n- [x] tudo pronto\n")
+
     def rodar(self, texto=DOC, tool=None, sessao=None, cwd=None, bruto=None):
         payload = bruto if bruto is not None else {
             "session_id": sessao or self.sessao,
@@ -252,6 +256,25 @@ class TestColheita(Base):
         self.assertIn("Colhidos automaticamente", fila)
         self.assertIn("respostas X1–Y2 do canal de voz", fila)
 
+    def test_fila_ilegivel_nao_e_sobrescrita_por_esqueleto(self):
+        # A colheita lê a fila para **reescrevê-la**. O fallback assumia
+        # "# Fila do loop\n" em qualquer falha de leitura: com o arquivo
+        # existindo e ilegível, isso gravava esqueleto por cima do contrato do
+        # ciclo. Colheita é acessória; a fila não. Mutação: voltar o fallback
+        # incondicional e a fila desaparece aqui.
+        self.armar()
+        with open(self.loop.p("QUEUE.md"), encoding="utf-8") as f:
+            antes = f.read()
+        os.chmod(self.loop.p("QUEUE.md"), 0o000)
+        try:
+            if os.access(self.loop.p("QUEUE.md"), os.R_OK):
+                self.skipTest("processo lê arquivo sem permissão (root?)")
+            self.loop.acrescentar_itens(["um item colhido"], "#0001")
+        finally:
+            os.chmod(self.loop.p("QUEUE.md"), 0o644)
+        with open(self.loop.p("QUEUE.md"), encoding="utf-8") as f:
+            self.assertEqual(f.read(), antes)
+
     def test_nao_duplica_item_ja_colhido(self):
         self.armar()
         self.rodar(self.real)
@@ -282,7 +305,17 @@ class TestGuardaCorpos(Base):
         self.assertIsNotNone(saida, "esperava aviso de encerramento")
         self.assertIn("LOOP-WORK ENCERROU", saida["reason"])
         self.assertIn(motivo, saida["reason"])
-        self.assertIn("push notification", saida["reason"])
+        # O aviso continua APONTANDO o caminho de notificar o dono...
+        self.assertIn("avisar o Samir", saida["reason"])
+        # ...mas em 17/08 deixou de MANDAR. O texto antigo dizia "**Não retome
+        # o trabalho** … não resuma o histórico no chat", e como o loop e a
+        # sessão compartilham tempo de vida essa ordem caía na parada de
+        # qualquer turno — inclusive de trabalho que o loop não conduziu. Hook
+        # que dá ordem sobre trabalho alheio tem autoridade aparente e pode
+        # abortar rodada boa; hook que RELATA devolve a decisão a quem sabe o
+        # que o turno era.
+        self.assertIn("relatório, não uma instrução", saida["reason"])
+        self.assertNotIn("Não retome o trabalho", saida["reason"])
         self.assertTrue(os.path.exists(self.loop.p("STATUS.md")))
         self.assertEqual(self.loop.ler()["fase"], "encerrando")
 
@@ -293,11 +326,139 @@ class TestGuardaCorpos(Base):
         self._encerrou(saida, "kill-switch")
 
     def test_fila_zerada_encerra(self):
+        # Sem relógio, a fila continua sendo o critério de pronto do ciclo
+        # (ADR-006): quem armou por itens declarou onde a rodada acaba.
         self.armar()
-        with open(self.loop.p("QUEUE.md"), "w", encoding="utf-8") as f:
-            f.write("# Fila\n\n- [x] tudo pronto\n")
+        self.zerar_a_fila()
         _, saida = self.rodar(DOC)
         self._encerrou(saida, "fila zerada")
+
+    # ── fila vazia sob relógio: reabastecer, não encerrar (ADR-015) ─────────
+
+    def test_fila_zerada_com_relogio_reabastece(self):
+        # O defeito medido: três rodadas do EOP armadas com `--duracao 6h` sobre
+        # fila cheia de `- [x]` morreram na iteração 1, com ~5h50 sobrando, porque
+        # `fila zerada` vinha antes do relógio na cadeia. Sob relógio a fila vazia
+        # não é fim — é o gatilho do turno que enche a fila.
+        # Mutação: tirar o `and not tem_relogio(st)` da cadeia e esta cai.
+        self.armar(duracao_max_min=360)
+        self.zerar_a_fila()
+        _, saida = self.rodar(DOC)
+        self.assertEqual(saida["decision"], "block")
+        self.assertNotIn("ENCERROU", saida["reason"])
+        self.assertIn("REABASTECIMENTO", saida["reason"])
+        self.assertIn("SEM-ESCOPO", saida["reason"])     # o escape, sempre à mão
+        self.assertTrue(self.loop.ler()["ativo"])
+
+    def test_janela_tambem_conta_como_relogio(self):
+        # `--janela 08:00-18:00` declara tempo do mesmo jeito que `--duracao`;
+        # ligar o reabastecimento só num dos dois seria arbitrário.
+        self.armar(janela="00:00-23:59")
+        self.zerar_a_fila()
+        _, saida = self.rodar(DOC)
+        self.assertIn("REABASTECIMENTO", saida["reason"])
+
+    def test_prompt_de_reabastecimento_diz_quanto_resta(self):
+        # Um turno que não sabe quanto resta trata 8 minutos como trata 4 horas.
+        self.armar(duracao_max_min=360)
+        self.zerar_a_fila()
+        _, saida = self.rodar(DOC)
+        self.assertIn("**6h00** de rodada", saida["reason"])
+
+    def test_prompt_promete_o_menor_entre_janela_e_relogio(self):
+        # Quando os dois estão de pé vale o MENOR: prometer 30h para um turno que
+        # tem até o fim do dia faz ele começar leitura que não termina. Relógio
+        # absurdo de propósito — a janela fecha no mesmo dia, qualquer que seja a
+        # hora em que a suíte rode.
+        self.armar(duracao_max_min=1800, janela="00:00-23:59")
+        self.zerar_a_fila()
+        _, saida = self.rodar(DOC)
+        resta = saida["reason"].split("e ainda há **")[1].split("**")[0]
+        self.assertNotEqual(resta, "30h00")
+        self.assertLess(int(resta.split("h")[0]), 24)
+
+    def test_escopo_do_scope_md_vai_verbatim_no_prompt(self):
+        # É onde mora o "para e pergunta" (ADR-014 cláusula 1). Reescrever a
+        # fronteira do dono é a única coisa que o hook não pode fazer com ela.
+        self.armar(duracao_max_min=360)
+        self.zerar_a_fila()
+        with open(self.loop.p("SCOPE.md"), "w", encoding="utf-8") as f:
+            f.write("Entra: modelagem dos volumes 20-39.\n"
+                    "Para e pergunta: qualquer coisa que toque cobrança.\n")
+        _, saida = self.rodar(DOC)
+        self.assertIn("volumes 20-39", saida["reason"])
+        self.assertIn("Para e pergunta: qualquer coisa que toque cobrança",
+                      saida["reason"])
+
+    def test_sem_scope_md_o_prompt_diz_que_a_fronteira_nao_foi_declarada(self):
+        # "Não sei onde parar" precisa chegar ao turno como fato. Senão ele infere
+        # uma fronteira e chama de escopo.
+        self.armar(duracao_max_min=360)
+        self.zerar_a_fila()
+        _, saida = self.rodar(DOC)
+        self.assertIn("Nenhum escopo declarado", saida["reason"])
+        self.assertIn("terminar a fase 3", saida["reason"])   # o objetivo responde
+
+    def test_veredito_de_escopo_esgotado_encerra_a_rodada(self):
+        # O escape da reposição (ADR-014 cláusula 2), agora com um fim próprio:
+        # o agente mede que não há bloco em escopo, escreve os números, e a
+        # rodada morre por veredito em vez de fabricar trabalho.
+        self.armar(duracao_max_min=360)
+        self.zerar_a_fila()
+        with open(self.loop.p("SEM-ESCOPO"), "w", encoding="utf-8") as f:
+            f.write("Varri os 12 volumes e os 84 ADRs: 3 hipóteses, 3 mediram "
+                    "zero.\nNada fora do já entregue.\n")
+        _, saida = self.rodar(DOC)
+        self._encerrou(saida, "escopo esgotado")
+        st = self.loop.ler()
+        self.assertEqual(st["encerrado_por"], "escopo esgotado")
+        self.assertIn("3 hipóteses", st["encerrado_detalhe"])
+        with open(self.loop.p("STATUS.md"), encoding="utf-8") as f:
+            status = f.read()
+        self.assertIn("Veredito do agente", status)
+        self.assertIn("3 mediram zero", status)
+
+    def test_veredito_vence_a_fila_cheia(self):
+        # O veredito é ordem de parar, não consequência de fila vazia: se o agente
+        # o escreveu com itens ainda pendentes, é porque mediu que o que sobrou
+        # não está em escopo. Encerrar depende dele, não da contagem.
+        self.armar(duracao_max_min=360)
+        open(self.loop.p("SEM-ESCOPO"), "w", encoding="utf-8").close()
+        _, saida = self.rodar(DOC)
+        self._encerrou(saida, "escopo esgotado")
+
+    def test_kill_switch_ainda_vence_o_veredito(self):
+        # Ordem do dono na frente de medição do agente — a cadeia não inverteu.
+        self.armar(duracao_max_min=360)
+        open(self.loop.p("STOP"), "w").close()
+        open(self.loop.p("SEM-ESCOPO"), "w", encoding="utf-8").close()
+        _, saida = self.rodar(DOC)
+        self._encerrou(saida, "kill-switch")
+
+    def test_reabastecimento_improdutivo_encerra_por_sem_progresso(self):
+        # A prova de que tirar a fila da cadeia não abriu loop infinito: três
+        # turnos de reabastecimento que não mexem em nada — nem na fila, nem na
+        # árvore — encerram pelo teto de degeneração, sozinhos.
+        self.armar(duracao_max_min=360, max_sem_progresso=2)
+        self.zerar_a_fila()
+        _, s1 = self.rodar(DOC)
+        self.assertIn("REABASTECIMENTO", s1["reason"])
+        _, s2 = self.rodar(DOC)
+        self.assertIn("REABASTECIMENTO", s2["reason"])
+        _, s3 = self.rodar(DOC)
+        self._encerrou(s3, "sem progresso")
+
+    def test_reabastecer_de_verdade_devolve_o_prompt_normal(self):
+        # A volta completa: o turno encheu a fila, então a parada seguinte já é
+        # trabalho de item — com o item nomeado, como em qualquer outra parada.
+        self.armar(duracao_max_min=360)
+        self.zerar_a_fila()
+        self.rodar(DOC)
+        with open(self.loop.p("QUEUE.md"), "a", encoding="utf-8") as f:
+            f.write("- [ ] 4.1 Modelar o inventário de fatos do VoIP\n")
+        _, saida = self.rodar(DOC)
+        self.assertNotIn("REABASTECIMENTO", saida["reason"])
+        self.assertIn("4.1 Modelar o inventário", saida["reason"])
 
     def test_teto_de_iteracoes_encerra(self):
         st = self.armar(max_iteracoes=1)
@@ -347,6 +508,45 @@ class TestGuardaCorpos(Base):
         _, saida = self.rodar("Preparei tudo.\n\n"
                               "Rodo o DROP TABLE nos dez schemas agora?")
         self.assertNotIn("ENCERROU", saida["reason"])
+
+    def test_rodada_que_nasceu_morta_encerra_calada(self):
+        # 17/08: três `armar` sobre uma fila 66/66 no EOP (paradas #20, #21, #22)
+        # e três relatórios de encerramento injetados no turno de quem estava
+        # fazendo outra coisa — cada rodada durou uma parada, com horas de
+        # relógio sobrando. Nada aconteceu, então não há o que relatar.
+        # Mutação: remover o `nada_aconteceu` e o `block` volta a sair.
+        with open(self.loop.p("QUEUE.md"), "w", encoding="utf-8") as f:
+            f.write("# Fila\n\n- [x] tudo isto já era feito antes de armar\n")
+        self.armar()
+        self.assertEqual(self.loop.ler()["pendentes_ao_armar"], 0)
+        rc, saida = self.rodar(DOC)
+        self.assertEqual(rc, 0)
+        self.assertIsNone(saida.get("reason") if saida else None)
+        self.assertIn("nada a relatar", saida["systemMessage"])
+        # O registro continua: encerrar calado não é encerrar sem rastro.
+        self.assertTrue(os.path.exists(self.loop.p("STATUS.md")))
+        self.assertEqual(self.loop.ler()["encerrado_por"], "fila zerada")
+        self.assertFalse(self.loop.ler()["ativo"])
+
+    def test_encerrar_na_primeira_parada_depois_de_trabalho_relata(self):
+        # O outro lado da moeda: `--itens 1` fecha o escopo na primeira parada, e
+        # ali houve rodada. Predicado largo demais silenciaria este relatório.
+        self.armar(escopo_itens=1)
+        with open(self.loop.p("QUEUE.md"), "w", encoding="utf-8") as f:
+            f.write(FILA.replace("- [ ] 3.1", "- [x] 3.1"))
+        _, saida = self.rodar(DOC)
+        self._encerrou(saida, "escopo concluído")
+
+    def test_estado_de_versao_anterior_relata(self):
+        # `pendentes_ao_armar` ausente é "não sei", e "não sei" nunca vale zero:
+        # `.loop/` armado por versão antiga continua relatando como antes.
+        st = self.armar()
+        del st["pendentes_ao_armar"]
+        with open(self.loop.p("QUEUE.md"), "w", encoding="utf-8") as f:
+            f.write("# Fila\n\n- [x] pronto\n")
+        self.loop.gravar(st)
+        _, saida = self.rodar(DOC)
+        self._encerrou(saida, "fila zerada")
 
     def test_parada_seguinte_ao_aviso_encerra_de_verdade(self):
         self.armar()

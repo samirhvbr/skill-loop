@@ -21,7 +21,7 @@ and hands the agent back the next item on the queue.
 > [skill-COMMITTER](https://github.com/samirhvbr/skill-COMMITTER).
 > Status: **first real run done** (2026-08-16, 21/21 queue items closed in 68 min,
 > two stops) — and its audit found the product's central defect, now fixed (ADR-012).
-> 171 tests.
+> 228 tests.
 
 ## The problem, measured
 
@@ -111,7 +111,7 @@ classifier would have lost it entirely.
 ## End conditions — the loop must cost a predictable amount
 
 An engine that restarts the agent by itself and never ends is an unbounded bill.
-There are **six** independent conditions; the first one to trigger ends the run,
+There are **seven** independent conditions; the first one to trigger ends the run,
 writes `STATUS.md` and fires the notification.
 
 | Condition | Flag | Example |
@@ -120,7 +120,8 @@ writes `STATUS.md` and fires the notification.
 | **Scope by marker** | `--ate TEXT` | `--ate "3.10 VoIP"` |
 | **Time window** | `--janela` `--dias` | `--janela 08:00-18:00 --dias seg-sex` |
 | **Wall clock** | `--duracao` | `--duracao 6h` |
-| Empty queue | — | the definition of done for the run |
+| Empty queue | — | the definition of done — **only without a clock** |
+| Scope exhausted | agent writes `.loop/SEM-ESCOPO` | the ending a timed run has |
 | Iteration ceiling | `--max` (200) | final net |
 
 Scope by item count measures **this run only** (`feitos_ao_armar` is the
@@ -160,11 +161,38 @@ returns `decision: block`.
 /loop-work retomar        re-arm from where it stopped (re-binds the session)
 ```
 
-Arming with an empty queue does not work: `.loop/QUEUE.md` is what the hook
-injects into the `reason`, and without it the continuation degrades to "carry on
-from where you left off" — the agent re-plans every turn and drifts. The skill
-reads the documentation and distils the queue **before** arming; that step
-decides whether the loop works at all.
+Arming with an empty queue does not work **for an item-bounded round** — and since
+`0.2.5` the command **refuses**: `.loop/QUEUE.md` is what the hook injects into the
+`reason`, and without it the continuation degrades to "carry on from where you left
+off" — the agent re-plans every turn and drifts. The skill reads the documentation
+and distils the queue **before** arming; that step decides whether the loop works
+at all. (For a time-bounded round the refusal does not apply — see below.)
+
+### A queue that refills itself — when you want hours, not items
+
+Arming by time (`--duracao 6h`) declares that the **clock** is the mission and the
+queue is scratch. Since `0.3.0` the engine treats it that way: with a clock on the
+table, `empty queue` leaves the end-condition chain and an empty queue becomes a
+**refill turn** — the hook tells the agent to pick the next uncovered block within
+scope, read its documentation in full, distil `- [ ]` items at the end of
+`QUEUE.md`, and carry on working (ADR-015). You paste nothing.
+
+What you supply is the **boundary**, because it is yours: `.loop/SCOPE.md` with what
+may enter and what "stops and asks" — the file goes into the prompt **verbatim**.
+Without it, scope comes from `--objetivo`, and the prompt tells the turn that the
+boundary was never declared, ordering it to refuse anything doubtful.
+
+And the ending: when the measurement says there is **no** in-scope block left, the
+agent writes the verdict with its numbers to `.loop/SEM-ESCOPO` and the round ends
+as `escopo esgotado`. That escape is not a detail — honouring the refill clause with
+no input forces it to **fabricate work**, which is worse than stopping.
+
+Before this, the mechanism was a self-reproducing item at the tail of the queue
+([prompts/reabastecer.md](prompts/reabastecer.md)), pasted by hand; it remains the
+path for a round **without** a clock. It is what produced the measurement that
+became the engine, on 2026-08-17: **14 consecutive stops without ending, 13 refills,
+queue from 22 to 66 items**, ending by written verdict — seven hypotheses tabulated,
+three became blocks, three measured zero (ADR-014).
 
 ## Watching it from a distance
 
@@ -207,7 +235,9 @@ was not one line of log about any of them.
 ├── INDEX.md          one row per stop
 ├── ASSUMPTIONS.md    what was decided without you      ← read this first
 ├── STATUS.md         why it ended
-├── STOP              kill-switch (presence is enough)
+├── STOP              kill-switch, yours (presence is enough)
+├── SCOPE.md          refill boundary you declare — optional, read verbatim
+├── SEM-ESCOPO        the agent's verdict: nothing in scope left
 └── entries/NNNN-{ASK,DOC}-slug.md
 ```
 
@@ -220,7 +250,7 @@ interrupted.
   PT-BR/EN lexicon reads as DOC and the loop continues without recording that the
   decision was yours. The fence is `ASSUMPTIONS.md` and `INDEX.md`, reviewed
   afterwards — not detector precision.
-- **No field numbers.** The engine has 171 tests; real operation is the next phase.
+- **No field numbers.** The engine has 200 tests; real operation is the next phase.
 - **The queue is written by a model** from your documentation. A bad queue means
   a bad loop, and the hook cannot detect that.
 - **`.loop/entries/` stores the agent's full message.** If it echoes a secret in

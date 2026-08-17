@@ -7,7 +7,7 @@
 ## Onde está
 
 **F0 e F1 entregues no mesmo dia; duas rodadas reais feitas.** O motor existe,
-roda e tem 171 testes com os controles verificados por mutação. A rodada de 16/08
+roda e tem 228 testes com os controles verificados por mutação. A rodada de 16/08
 no EOP fechou 21/21 itens em 68 minutos com duas paradas, e a auditoria dela
 achou o defeito central do produto (ADR-012). **Duas rodadas não são medição:** a
 distribuição das condições de fim, o trabalho por iteração e a taxa de erro de
@@ -23,7 +23,7 @@ escrito.
 ## O que roda hoje
 
 ```bash
-python3 -m unittest discover -s tests -v      # 171 testes, sem modelo, sem rede
+python3 -m unittest discover -s tests -v      # 228 testes, sem modelo, sem rede
 ./install.sh --dry-run                        # mostra o que faria
 loop-ctl armar --raiz <repo> --objetivo "..." --itens 10
 loop-ctl porque --raiz <repo>                 # por que não continuou
@@ -71,9 +71,11 @@ vezes; e se o trabalho puxado da documentação **derivou**. Derivar é o achado
 mais importante dos três — significaria que fila escrita pelo próprio loop
 precisa de trava, e o teto da flag nasceria medido em vez de inventado.
 
-⛔ **Não** escrever esse padrão no `SKILL.md` nem abrir ADR antes da rodada: a
-alternativa descartada hoje foi justamente desenhar `--reabastecer N` antes de
-saber como o padrão se comporta.
+~~⛔ **Não** escrever esse padrão no `SKILL.md` nem abrir ADR antes da rodada~~ —
+**cumprido e encerrado em 17/08, 17h**: a rodada aconteceu, deu número, e o padrão
+virou [prompts/reabastecer.md](../prompts/reabastecer.md) + `SKILL.md` §1.1 +
+`SPEC.md` §5.2 + **ADR-014**. A alternativa descartada segue descartada: o teto de
+`--reabastecer N`, se a flag existir um dia, nasce medido em 13 reposições.
 
 ### Resultado parcial (17/08, 13:02 — rodada ainda viva)
 
@@ -99,10 +101,42 @@ na impressão digital, então não deveria acumular — mas acumulou uma vez, e 
 motivo não foi apurado.
 
 ⚠️ **Ainda não medido:** se o trabalho puxado da documentação está **no alvo**.
-Os 6 relatos foram classificados DOC e arquivados, mas ninguém leu o conteúdo
+Os relatos foram classificados DOC e arquivados, mas ninguém leu o conteúdo
 para dizer se a fila que o próprio loop escreveu é boa. É o risco que o
 README nomeia ("fila ruim = loop ruim, e o hook não detecta isso"), e agora quem
 escreve a fila é o loop.
+
+### Resultado final (17/08, 16:30 — rodada encerrada)
+
+**O padrão sustentou até o insumo acabar, e terminou por veredito.**
+
+| Medida | Valor |
+|---|---|
+| Paradas sem encerrar | **14** (`#6`…`#19`), todas `continuou` |
+| Reabastecimentos | **13**, o item se repôs em todas as voltas menos a última |
+| Fila | 22 → **66 itens** (66 feitos, 0 pendentes) |
+| Hipóteses de bloco na 7ª volta | 7 tabeladas: **3 viraram bloco**, 1 dívida real, **3 mediram zero** |
+| Condição que encerrou | `fila zerada` — **de propósito**, com veredito escrito |
+| ASK na janela do padrão | 1 (`#19`, handoff) → `continuou`, premissa registrada |
+
+**O achado que mudou o produto:** na 10ª volta o agente **quebrou a cláusula de
+reposição de propósito** e escreveu por quê no próprio `QUEUE.md` — *"cumpri-la
+sem insumo obriga a fabricar bloco, e a rodada mediu que bloco fabricado é o pior
+desfecho"*. Sem esse escape, o padrão degenera em trabalho inventado; com ele, a
+fila zerada é o desfecho **correto**. A cláusula entrou normativa no ADR-014.
+
+**O que sobrou como ruído do produto, e virou conserto:** depois do encerramento
+legítimo (`#19`), três `armar` sobre a fila já 66/66 produziram as paradas `#20`,
+`#21` e `#22` — três rodadas que nasceram mortas, cada uma gastando um turno para
+dizer que nada aconteceu, em sessões que estavam fazendo outra coisa. Daí saíram
+as duas guardas de hoje: `armar`/`retomar` recusam fila vazia, e rodada que nasceu
+morta encerra calada.
+
+⚠️ **Segue sem apuração:** o `sem progresso` que marcou 1/3 durante a rodada (ver
+acima). E o painel do `loop-watch` morreu com `UnicodeDecodeError` às 16:39 ao ler
+uma entry em plena gravação — consertado no mesmo dia com `errors="replace"` nas
+leituras de registro, mas é o segundo defeito da família "ferramenta de longe que
+morre por causa do arquivo que acompanha".
 
 ## O que precisa do Samir
 

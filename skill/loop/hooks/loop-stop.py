@@ -34,9 +34,9 @@ _AQUI = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(_AQUI), "lib"))
 
 from classificador import classificar          # noqa: E402
-from diagnostico import condicoes_de_fim       # noqa: E402
+from diagnostico import condicoes_de_fim, tem_relogio   # noqa: E402
 from estado import (Loop, achar_raiz, agora,   # noqa: E402
-                    objetivo_para_exibir)
+                    objetivo_para_exibir, restante_da_rodada)
 from transcricao import ultima_mensagem        # noqa: E402
 
 # repo/skill/loop/hooks → repo
@@ -44,6 +44,13 @@ _RAIZ_SKILL = os.path.dirname(os.path.dirname(os.path.dirname(_AQUI)))
 TEMPLATE = os.environ.get(
     "LOOP_TEMPLATE",
     os.path.join(_RAIZ_SKILL, "prompts", "continuacao.md"),
+)
+# Segundo template: fila zerada com relógio na mesa (ADR-015). Arquivo separado
+# porque é outro trabalho — encher a fila, não executar item —, e um prompt que
+# tentasse ser os dois seria pior nos dois.
+TEMPLATE_REABASTECIMENTO = os.environ.get(
+    "LOOP_TEMPLATE_REABASTECIMENTO",
+    os.path.join(_RAIZ_SKILL, "prompts", "reabastecimento.md"),
 )
 
 # Ações sem volta. Só consultadas quando politica_ask =
@@ -75,6 +82,20 @@ próximo, sem pedir confirmação. Só encerre se a fila zerar, se existir
 `.loop/STOP`, ou se a próxima ação for destrutiva/irreversível.
 """
 
+FALLBACK_REABASTECIMENTO = """[LOOP-WORK · iteração {iteracao} · REABASTECIMENTO]
+A fila zerou ({feitos} feito(s)) e ainda há {restante_relogio} de rodada. Ninguém
+está lendo o chat: seu trabalho neste turno é **encher a fila de novo**.
+
+Objetivo: {objetivo}
+Escopo: {escopo}
+
+Escolha o próximo bloco ainda não coberto **dentro do escopo**, leia a
+documentação dele inteira, destile em linhas `- [ ]` executáveis sozinhas no fim
+de `.loop/QUEUE.md`, registre em uma linha o que a triagem mediu, e siga
+trabalhando o primeiro item. Se **não houver** bloco em escopo, não invente
+trabalho: escreva o veredito com os números em `.loop/SEM-ESCOPO` e encerre.
+"""
+
 
 def _preencher(gabarito, campos):
     """`str.replace` em vez de `str.format`: o template é markdown editável à
@@ -84,14 +105,14 @@ def _preencher(gabarito, campos):
     return gabarito
 
 
-def _template():
+def _template(caminho=None, fallback=None):
     try:
-        with open(TEMPLATE, encoding="utf-8") as f:
+        with open(caminho or TEMPLATE, encoding="utf-8") as f:
             corpo = f.read()
         # descarta o comentário HTML de cabeçalho, que é doc, não prompt
         return re.sub(r"^<!--.*?-->\s*", "", corpo, flags=re.DOTALL)
     except (IOError, OSError):
-        return FALLBACK
+        return FALLBACK if fallback is None else fallback
 
 
 def _irreversivel(texto):
@@ -115,6 +136,27 @@ def _bloco_ask(res):
         "`.loop/ASSUMPTIONS.md` (pergunta · decisão · alternativa descartada · "
         "como reverter) e siga. Não repita a pergunta.\n\n" % (res.sinal, cabeca)
     )
+
+
+def _escopo(loop, st):
+    """A fronteira do reabastecimento, como o prompt vai vê-la.
+
+    `.loop/SCOPE.md` **verbatim** quando existe — é onde mora o "para e pergunta"
+    do ADR-014, e reescrever a fronteira do dono é a única coisa que este código
+    não pode fazer. Sem o arquivo, o `--objetivo` responde, e o prompt diz que a
+    fronteira **não foi declarada**: um turno que não sabe onde parar precisa
+    saber que não sabe, senão ele infere uma fronteira e chama de escopo.
+    """
+    declarado = loop.escopo_declarado()
+    if declarado:
+        return declarado
+    objetivo = objetivo_para_exibir(st.get("objetivo"))
+    return ("⚠️ Nenhum escopo declarado (`.loop/SCOPE.md` não existe). O único "
+            "limite é o objetivo da rodada: **%s**.\n"
+            "Na dúvida sobre se um bloco cabe aqui, ele **não** cabe: trate como "
+            "fora de escopo, registre a medição e vá para o próximo candidato. "
+            "Nada que envolva dinheiro, credencial, dado de produção ou decisão "
+            "de produto entra sem escopo declarado." % objetivo)
 
 
 def _bloco_colhidos(colhidos):
@@ -234,27 +276,67 @@ def principal():
         st["encerrado_detalhe"] = detalhe or ""
         st["encerrado_em"] = agora()
         loop.gravar_status(st, motivo, detalhe or "")
-        if st.get("notificar"):
+        # Rodada que não teve rodada: primeira parada, zero item fechado desde
+        # que armou. Não há o que relatar, e o relatório cairia no turno de quem
+        # estava fazendo outra coisa. Aconteceu **três vezes** em 17/08 — as
+        # paradas #20, #21 e #22 do EOP, cada uma um `armar` sobre fila já 66/66,
+        # todas encerrando na iteração 1 com horas de relógio sobrando.
+        #
+        # Amaciar o texto (acima) tirou a autoridade indevida, não o ruído: um
+        # turno inteiro ainda era gasto para dizer que nada aconteceu. `armar`
+        # passou a recusar fila vazia; isto é o cinto do suspensório, para
+        # `.loop/` armado por versão antiga ou com `--mesmo-sem-fila`.
+        # "Nasceu morta" = armou sem pendente algum, e na primeira parada ainda
+        # não há pendente. Encerrar na primeira parada **depois** de trabalho real
+        # (política ASK=parar, kill-switch, escopo de 1 item) continua relatando:
+        # ali houve rodada, e é dela que o relatório fala — foi o que a suíte
+        # cobrou quando o predicado era largo demais. `pendentes_ao_armar` é
+        # `None` em `.loop/` de versão anterior, e "não sei" relata.
+        nada_aconteceu = (iteracao == 1 and pendentes == 0
+                          and st.get("pendentes_ao_armar") == 0)
+        if st.get("notificar") and not nada_aconteceu:
             st["fase"] = "encerrando"
             loop.gravar(st)
+            # RELATÓRIO, não ordem — e a diferença custou duas rodadas.
+            #
+            # O texto anterior mandava "**Não retome o trabalho** … não resuma o
+            # histórico no chat". Como o loop e a SESSÃO compartilham tempo de
+            # vida, essa mensagem chega na parada de um turno que pode não ter
+            # nada a ver com o loop: em 17/08 ela caiu no meio de uma rodada de
+            # modelagem legítima, com autoridade aparente de instrução do
+            # sistema. Hook que dá ordem sobre trabalho que ele não conduziu é
+            # pior que hook quebrado — o quebrado só faz ruído.
+            #
+            # A amarração por sessão (acima) não resolve isto: era a MESMA
+            # sessão, a que armou o loop. O gate que faltaria é "este turno foi
+            # trabalho de loop?", e o hook não tem como saber. Então ele deixa
+            # de mandar: informa o encerramento e devolve a decisão a quem está
+            # conduzindo, que é quem sabe o que o turno era.
             _responder("block", reason=(
                 "[LOOP-WORK ENCERROU · %s — %s]\n\n"
-                "**Não retome o trabalho.** O loop parou depois de %d iteração(ões); "
-                "a fila está em %d feito(s) / %d pendente(s).\n\n"
-                "Faça só isto e encerre o turno:\n"
-                "1. Envie uma push notification ao Samir com uma linha: motivo do "
-                "encerramento, o que avançou e o que ficou pendente.\n"
-                "2. Não continue nenhum item, não resuma o histórico no chat — "
-                "está tudo em `.loop/STATUS.md` e `.loop/INDEX.md`."
+                "O loop parou depois de %d iteração(ões); a fila está em %d "
+                "feito(s) / %d pendente(s). O relato de cada parada está em "
+                "`.loop/entries/`, e o resumo em `.loop/STATUS.md`.\n\n"
+                "**Isto é um relatório, não uma instrução.** Se o turno que "
+                "acabou era trabalho do loop, o natural é avisar o Samir em uma "
+                "linha (motivo, o que avançou, o que ficou pendente) e encerrar. "
+                "Se era outra coisa — o loop e a sessão compartilham tempo de "
+                "vida, e esta mensagem chega na parada de qualquer turno —, "
+                "siga o que estava fazendo: quem sabe o que o turno era é você, "
+                "não o hook."
                 % (motivo, detalhe or "", iteracao, feitos, pendentes)))
         # Sem notificação não há turno seguinte para consumir a fase
         # "encerrando" — o loop precisa morrer aqui mesmo.
         st["ativo"] = False
         loop.gravar(st)
-        _responder("allow", aviso="loop-work: encerrado (%s)" % motivo)
+        aviso = "loop-work: encerrado (%s)" % motivo
+        if nada_aconteceu:
+            aviso = ("loop-work: encerrado (%s) na primeira parada, sem fechar "
+                     "item nenhum — nada a relatar" % motivo)
+        _responder("allow", aviso=aviso)
 
     loop.gravar(st)
-    reason = _preencher(_template(), {
+    campos = {
         "iteracao": iteracao,
         "max_iteracoes": st.get("max_iteracoes", 200),
         "kind": res.kind,
@@ -266,8 +348,21 @@ def principal():
         "objetivo": objetivo_para_exibir(st.get("objetivo")),
         "bloco_ask": _bloco_ask(res),
         "bloco_colhidos": _bloco_colhidos(colhidos),
-    })
-    _responder("block", reason=reason)
+    }
+
+    # Fila vazia com relógio na mesa não é fim — é turno de reabastecimento
+    # (ADR-015). A cadeia já deixou passar (`fila zerada` só encerra rodada sem
+    # relógio); o que muda aqui é O QUE se pede, porque o trabalho é outro:
+    # encher a fila, não executar item. Mandar o prompt de continuação com
+    # "(fila vazia)" no lugar do item era o caminho barato e o pior: o agente
+    # recebe uma ordem para executar o que não existe.
+    if item is None and tem_relogio(st):
+        campos["escopo"] = _escopo(loop, st)
+        campos["restante_relogio"] = restante_da_rodada(st)
+        gabarito = _template(TEMPLATE_REABASTECIMENTO, FALLBACK_REABASTECIMENTO)
+    else:
+        gabarito = _template()
+    _responder("block", reason=_preencher(gabarito, campos))
 
 
 if __name__ == "__main__":

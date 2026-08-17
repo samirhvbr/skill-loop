@@ -1,6 +1,6 @@
 # Versão — skill-LOOP
 
-**Versão atual:** `0.2.4`
+**Versão atual:** `0.3.0`
 
 > Este arquivo é a **fonte da verdade** da versão do projeto. Qualquer lugar que
 > precise exibir ou reportar a versão extrai o **primeiro número semver (`X.Y.Z`)**
@@ -61,6 +61,169 @@ da mesma entrega repetem a versão.
 
 ## 3. Changelog
 
+### `0.3.0` — 2026-08-17 — a fila mandava na rodada por tempo, e não era dela a missão
+
+O dono digitou `loop-ctl armar --raiz ~/x/EOP --duracao 6h` sobre uma fila 66/66 e
+tomou `erro: nenhum item - [ ] na fila`. A pergunta que veio junto é a mais curta
+que este projeto recebeu: *"por que o loop está avaliando a fila? o trabalho do loop
+é meio que só dizer continua"*. Ela está certa, e o defeito era de desenho: a fila
+fazia **duas** coisas — o **conteúdo** da continuação (legítimo, insubstituível) e a
+**condição de fim #4** (errada quando há relógio). O guarda-corpo do `0.2.5` foi a
+consequência final: nascido para barrar rodada morta, passou a barrar o caminho
+certo.
+
+#### Fila vazia com relógio não encerra: o motor reabastece (ADR-015)
+
+- `fila zerada` **só encerra rodada sem relógio**. Com `duracao_max_min` ou `janela`
+  declarados, a fila vazia sai da cadeia e vira **turno de reabastecimento**.
+  Gatilho **derivado** (`diagnostico.tem_relogio`), não flag nova: quem escreveu
+  `--duracao 6h` já declarou que a missão é o relógio. `STATE.json` **não muda de
+  contrato**, e estado de versão anterior cai no comportamento antigo.
+- Segundo template, `prompts/reabastecimento.md` — o `reabastecer.md` que o dono
+  colava na cauda da fila, virado prompt do motor, com as mesmas cláusulas do
+  ADR-014. O hook escolhe por trabalho: `item is None` + relógio → reabastecer.
+  Mandar o prompt de continuação com `(fila vazia)` no lugar do item seria uma ordem
+  para executar o que não existe.
+- **Escopo** do reabastecimento: `.loop/SCOPE.md` **verbatim** quando existe; senão
+  o `--objetivo`, e o prompt diz ao turno que a fronteira **não foi declarada** e
+  manda recusar o duvidoso. Quem não sabe onde parar precisa saber que não sabe.
+- **Fim novo — `escopo esgotado`**, condição #4, lida de `.loop/SEM-ESCOPO`: o agente
+  mede que não há bloco em escopo, escreve os números, e o `STATUS.md` cita o
+  veredito. Arquivo separado do `STOP` porque um só apagaria **quem** decidiu
+  encerrar: o kill-switch é ordem do dono, este é medição do agente. `armar` apaga o
+  arquivo (depois das guardas); `retomar` não, e `porque` avisa que ele está lá.
+- `armar --duracao`/`--janela` **deixa de recusar** fila vazia, e avisa que a
+  primeira parada é reabastecimento — mais um aviso se falta `SCOPE.md`. Sem
+  relógio, a recusa do `0.2.5` fica intacta, mensagem inclusive.
+- `loop-watch` não pode mais marcar `fila zerada` como fim sob relógio: a linha da
+  fila vira informativa (`fila (não encerra) · N pendente(s) → reabastece`, motivo
+  `None` de propósito) e entra a de `escopo esgotado`. Era este painel que, em
+  17/08, apontava `← encerrou aqui` na fila com `resta 5h22` duas linhas abaixo.
+- `dur()` e o novo `restante_da_rodada()` saíram do `loop_watch` para a lib: o prompt
+  precisa do mesmo formatador, e duas cópias divergem na primeira borda (`0` não é
+  "0min", é "esgotado").
+
+#### O que **não** mudou, de propósito
+
+- **Rodada por itens** — sem relógio a fila continua sendo o critério de pronto
+  (ADR-006), a recusa do `armar` continua, e o `reabastecer.md` continua sendo o
+  mecanismo dela.
+- **O anti-loop-infinito é o mesmo**: `sem progresso`. Turno que repõe muda a
+  contagem da fila (entra no sha1 da impressão) e zera o contador; turno que não
+  produz nada acumula e encerra em 3 — com teste que prova.
+- **Ordem da cadeia**: kill-switch e tetos continuam na frente do veredito. Ordem do
+  dono acima de medição do agente, e o teto de degeneração acima de tudo que o
+  agente escreve.
+
+**228 testes verdes**, +21. Quatro controles, quatro mutações: desligar o gatilho
+derivado derruba 10 testes; o veredito, 5; a guarda do `armar`, 4; a linha do
+painel, 2.
+
+⛔ **Não medido:** se o reabastecimento conduzido pelo motor deriva menos ou mais que
+o conduzido pelo item na cauda — dois prompts com as mesmas cláusulas e contextos
+diferentes. Junta-se à P-05.
+
+### `0.2.5` — 2026-08-17 — a rodada que nasce morta, e o reabastecimento promovido
+
+A rodada de 22 paradas do EOP encerrou por `fila zerada` às 16:30 — **corretamente,
+e com veredito escrito**. O que veio depois é que estava errado: três `armar` sobre
+a fila já 66/66 produziram as paradas `#20`, `#21` e `#22`, cada uma durando **uma**
+parada com horas de relógio sobrando, e cada uma injetando o relatório de
+encerramento no turno de quem estava fazendo outra coisa. Foi o que o agente do EOP
+nomeou como *"instrução de parada injetada em contexto errado"*.
+
+#### Armar sem pendente vira erro, não aviso
+
+- `armar` e `retomar` **recusam** fila sem nenhum `- [ ]` (`--mesmo-sem-fila`
+  força). O aviso já existia hoje de manhã e não impediu **nenhuma** das três:
+  texto impresso depois de o estado estar gravado não é guarda-corpo.
+- A recusa não deixa efeito atrás: o `armar` apagava o `.loop/STOP` **antes** das
+  guardas, então um comando que abortava já tinha desarmado o kill-switch — a única
+  trava que o dono aciona sem terminal na sessão.
+
+#### Rodada que nasceu morta encerra calada
+
+- `pendentes_ao_armar` (campo novo, aditivo) grava quantos itens havia a fazer na
+  hora de armar. Zero + primeira parada + zero pendente agora = **nada aconteceu**:
+  o hook encerra com `systemMessage` e **não** emite o relatório. `None` (estado de
+  versão anterior) relata como antes — "não sei" nunca vale zero.
+- O predicado começou como `iteracao == 1 and feitos == feitos_ao_armar` e a suíte
+  cobrou: silenciava encerramento **legítimo** na primeira parada (política
+  ASK=parar, `--itens 1`), onde houve rodada e o relatório é o certo. Medir o fato
+  no `armar` substituiu a inferência por dois contadores que podiam coincidir.
+- Registro inalterado: `STATUS.md`, entry e `INDEX.md` continuam escritos.
+
+#### Leitura de registro não pode matar quem lê
+
+O painel morreu com traceback às **16:39:57**, no refresh seguinte a uma tela que
+renderizou certo 30 s antes: leu uma entry no meio da gravação e
+`UnicodeDecodeError` — que é `ValueError` — passou por baixo do
+`except (IOError, OSError)`.
+
+- `errors="replace"` nas leituras de registro: entries e `STATUS.md` no painel,
+  `QUEUE.md` no motor. A entry estragada **continua na tela**, com o byte ruim como
+  U+FFFD; sobreviver escondendo a parada seria o mesmo painel mentiroso por outro
+  caminho — e foi assim que a primeira versão do teste passou com o controle
+  desligado (a mutação derrubou 0 testes, e o teste foi refeito).
+- Na fila isso é mais que cosmético: quem escreve o `QUEUE.md` é o **agente**, e o
+  hook a lê no instante do `Stop` — a janela é o turno de reabastecimento. A
+  exceção seria engolida pelo fail-open e a parada se perderia **em silêncio**,
+  justamente na volta em que a fila cresceu.
+- E a colheita deixou de gravar esqueleto por cima de fila ilegível: ela lê o
+  `QUEUE.md` para **reescrevê-lo**, e o fallback `"# Fila do loop\n"` valia para
+  qualquer falha de leitura — com o arquivo existindo, isso apagava o contrato do
+  ciclo. Agora esqueleto só quando não há arquivo; qualquer outra falha desiste da
+  colheita, que é acessória.
+
+#### O reabastecimento vira artefato do produto (ADR-014)
+
+O ⛔ de hoje de manhã dizia para **não** documentar o padrão antes de a rodada
+medir. A rodada mediu: **14 paradas seguidas sem encerrar** (`#6`…`#19`), **13
+reabastecimentos**, fila de **22 → 66 itens**, intervalos de 25 · 14 · 10 · 10 · 7
+min. E o achado que mudou o desenho: na 10ª volta o agente **quebrou a cláusula de
+reposição de propósito**, com as sete hipóteses tabeladas (três viraram bloco, três
+mediram zero), porque *"cumpri-la sem insumo obriga a fabricar bloco"*.
+
+- [prompts/reabastecer.md](prompts/reabastecer.md) — o item canônico, com as duas
+  cláusulas normativas: **escopo declarado** (com o que "para e pergunta") e
+  **escape da reposição**.
+- `SKILL.md` §1.1, `SPEC.md` §5.2, ADR-014, e o `armar` apontando para o arquivo
+  quando recusa fila vazia.
+- Fica dito o que isso **não** é: automático. A promessa de horas depende de alguém
+  colar o item na fila — é decisão, não esquecimento.
+- ⛔ Segue sem medição se a fila escrita pelo próprio loop **deriva** ao longo de
+  muitas voltas (P-05). Contar as 44 linhas novas não responde; ler o que elas
+  produziram, sim.
+
+**Testes: 184 → 200.** Mutação de cada controle:
+
+| Controle desligado | Testes que caem |
+|---|---|
+| `armar`/`retomar` voltam a avisar em vez de recusar | 3 |
+| recusa volta a apagar o kill-switch antes de abortar | 1 |
+| rodada que nasceu morta volta a emitir o rito | 1 |
+| predicado largo (qualquer 1ª parada fica calada) | 8 |
+| `pendentes_ao_armar` deixa de ser gravado | 1 |
+| painel volta a morrer com byte inválido na entry | 1 |
+| contagem da fila volta a estourar com byte inválido | 1 |
+| colheita volta a gravar esqueleto por cima da fila ilegível | 1 |
+
+**A mutação pendente do `0.2.4` foi medida** — a rodada do EOP encerrou e o
+`classificador.py` parou de ser editado, então mutar-e-restaurar deixou de arriscar
+o trabalho de outro. Cada marcador voltando a ser nu (`\s*:` → `\b`):
+
+| Marcador que volta a ser nu | Testes que caem |
+|---|---|
+| `próxima rodada` | 2 |
+| `próximo ciclo` | 1 |
+| `não coberto` | 2 |
+| os três juntos | 3 |
+
+Os três juntos derrubam **menos** que a soma: os testes de regressão do `0.2.4`
+usam prosa real e uma frase pode casar com mais de um marcador, então a mesma
+asserção cai por qualquer um deles. O que importa é que **nenhum** dos três está
+sem teste — era exatamente o que o ⛔ deixava em aberto.
+
 ### `0.2.4` — 2026-08-17 — o marcador nu, e quando cada parada foi
 
 > Duas entregas na mesma árvore, e o registro diz de quem é cada uma: o conserto
@@ -91,11 +254,6 @@ causa era a **forma do padrão**.
   nos dois sentidos, para a catraca não absolver por engano.
 
 #### O painel: quando cada parada foi, e quanto tempo levou
-
-Pedido do Samir durante a rodada, e o defeito é o mesmo que o enganou de manhã: o
-painel mostrou `09:32 · 09:03 · 21:19 · 20:24` nas últimas paradas, e as duas de
-baixo eram do **dia anterior** — nada na tela dizia isso. Num registro que
-atravessa a meia-noite, `hh:mm` sozinho engana com cara de dado.
 
 Pedido do Samir durante a terceira rodada, e o defeito é o mesmo que o enganou de
 manhã: o painel mostrou `09:32 · 09:03 · 21:19 · 20:24` nas últimas paradas, e as

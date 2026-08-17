@@ -23,10 +23,16 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "lib"))
 
 from diagnostico import (condicoes_de_fim,             # noqa: E402
-                         portoes_de_inercia)
+                         portoes_de_inercia, tem_relogio)
 from estado import (Loop, PADRAO, achar_raiz, agora,   # noqa: E402
                     fora_da_janela, minutos_desde, objetivo_legivel,
                     objetivo_para_exibir, parse_duracao)
+
+# repo/skill/loop → repo. Caminho absoluto porque quem lê a mensagem está no
+# repositório ALVO, onde "prompts/reabastecer.md" não existe.
+REABASTECER = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))),
+    "prompts", "reabastecer.md")
 
 ESQUELETO_FILA = """# Fila do loop
 
@@ -48,6 +54,47 @@ def _raiz(args):
     return achar_raiz(os.getcwd()) or os.getcwd()
 
 
+def _com_relogio(args):
+    """A rodada em `args` foi pedida por tempo? — o mesmo teste de `tem_relogio`,
+    mas sobre a linha de comando, que é onde ele precisa valer **antes** de haver
+    estado gravado."""
+    return bool(getattr(args, "duracao", None) or getattr(args, "janela", None))
+
+
+def _recusar_fila_vazia(loop, args, verbo):
+    """`2` quando a fila não tem pendente **e não há relógio** — ou `None`.
+
+    Armar com zero pendentes e sem relógio é uma rodada **provadamente** morta:
+    `fila zerada` dispara na primeira parada, antes de escopo. Em 17/08 isso
+    aconteceu três vezes seguidas no EOP (paradas #20, #21 e #22, todas
+    `encerrou: fila zerada` na iteração 1, com 5h52 de relógio sobrando) — e cada
+    uma ainda injetou o rito de encerramento no turno de quem estava fazendo
+    outra coisa.
+
+    Era aviso e virou recusa porque o aviso já existia e não impediu nenhuma das
+    três: texto impresso depois de o estado estar gravado não é guarda-corpo.
+
+    **Com relógio a recusa sai de cena** (ADR-015): ali a fila vazia deixou de
+    encerrar, e a primeira parada é turno de reabastecimento. A guarda passou a
+    barrar exatamente o comando certo — `armar --duracao 6h` sobre fila 66/66 —,
+    e guarda-corpo que barra o caminho certo é defeito, não rigor.
+    """
+    pend, feitos = loop.contagem_fila()
+    if pend or getattr(args, "mesmo_sem_fila", False) or _com_relogio(args):
+        return None
+    print("erro: nenhum item `- [ ]` na fila — %s aqui produz uma rodada que "
+          "morre na primeira parada." % verbo)
+    if feitos:
+        print("      (a fila tem %d item(ns) já marcado(s) `- [x]`, e item feito "
+              "não é trabalho a fazer)" % feitos)
+    print("      Destile o próximo bloco em linhas `- [ ]` no fim de "
+          "%s/.loop/QUEUE.md e repita o comando." % loop.raiz)
+    print("      Ou arme por tempo — `--duracao 6h` / `--janela 08:00-18:00`: aí "
+          "a fila vazia não encerra, ela vira turno de reabastecimento (ADR-015).")
+    print("      Para armar mesmo assim, sem relógio: --mesmo-sem-fila.")
+    return 2
+
+
 def cmd_armar(args):
     raiz = _raiz(args)
     loop = Loop(raiz)
@@ -55,8 +102,6 @@ def cmd_armar(args):
     if not os.path.exists(loop.p("QUEUE.md")):
         with open(loop.p("QUEUE.md"), "w", encoding="utf-8") as f:
             f.write(ESQUELETO_FILA)
-    if os.path.exists(loop.p("STOP")):
-        os.remove(loop.p("STOP"))
 
     duracao = parse_duracao(args.duracao)
     if args.duracao and duracao is None:
@@ -79,6 +124,20 @@ def cmd_armar(args):
               "ilegível aqui é ilegível %d vezes." % args.max)
         print("      Escreva uma linha de verdade, ou omita o argumento.")
         return 2
+
+    erro = _recusar_fila_vazia(loop, args, "armar")
+    if erro:
+        return erro
+
+    # Só depois das guardas: comando que recusa não pode ter deixado efeito
+    # atrás. Apagar o kill-switch e então abortar desarmaria a única trava que
+    # o dono pode acionar sem terminal na sessão.
+    for marcador in ("STOP", "SEM-ESCOPO"):
+        # O veredito de escopo esgotado é da rodada que acabou. Deixá-lo em disco
+        # faria a rodada nova encerrar na primeira parada citando a medição da
+        # anterior — o mesmo eco durando mais que a fonte que o STATUS.md já teve.
+        if os.path.exists(loop.p(marcador)):
+            os.remove(loop.p(marcador))
 
     st = loop.iniciar(
         objetivo=args.objetivo or "",
@@ -105,9 +164,18 @@ def cmd_armar(args):
     print("  política   : ASK=%s · colheita=%s · notificar=%s"
           % (st["politica_ask"], st["colher_itens"], st["notificar"]))
     print("  sessão     : %s" % (st["session_id"] or "a primeira que parar"))
-    if pend == 0:
-        print("\n⚠️  fila vazia: o loop encerra na primeira parada. "
-              "Preencha .loop/QUEUE.md antes de começar.")
+    if pend == 0 and tem_relogio(st):
+        print("\n⚠️  fila vazia + relógio: a **primeira parada é turno de "
+              "reabastecimento** — o hook manda destilar o próximo bloco, não "
+              "encerra (ADR-015).")
+        if not loop.escopo_declarado():
+            print("    Escopo sai só do --objetivo: sem `%s/.loop/SCOPE.md`, o "
+                  "prompt avisa o agente de que a fronteira não foi declarada e "
+                  "manda recusar o que for duvidoso." % loop.raiz)
+    elif pend == 0:
+        # Só se chega aqui com `--mesmo-sem-fila`: a guarda já recusou o resto.
+        print("\n⚠️  fila vazia por opção sua (--mesmo-sem-fila): o loop encerra "
+              "na primeira parada.")
     if st["janela"] and fora_da_janela(st["janela"], st["dias"]):
         print("\n⚠️  agora está FORA da janela %s: o loop encerra na primeira "
               "parada." % st["janela"])
@@ -122,8 +190,14 @@ def _fim_por(st, pendentes):
     da cadeia em dois pontos. Resumo que promete ordem e entrega outra é pior
     que resumo sem ordem, porque quem lê tira conclusão de qual bate antes.
     """
-    partes = ["%d iterações" % st.get("max_iteracoes", 0),
-              "fila zerada (%d pendente(s))" % pendentes]
+    partes = ["%d iterações" % st.get("max_iteracoes", 0)]
+    if tem_relogio(st):
+        # Sob relógio a fila não fecha a rodada — quem fecha é o veredito escrito
+        # pelo agente, ou o tempo. Listar "fila zerada" aqui prometeria um fim que
+        # a cadeia não vai cumprir.
+        partes.append("escopo esgotado (veredito em .loop/SEM-ESCOPO)")
+    else:
+        partes.append("fila zerada (%d pendente(s))" % pendentes)
     if st.get("janela"):
         partes.append("fora de %s%s" % (st["janela"],
                                         " (%s)" % st["dias"] if st.get("dias") else ""))
@@ -176,6 +250,9 @@ SIMBOLO = {True: "✓", False: "✗", None: "·"}
 CONSERTO_DO_FIM = {
     "kill-switch": "apague o kill-switch: rm %s/.loop/STOP",
     "fila zerada": "preencha %s/.loop/QUEUE.md com itens `- [ ]` e rearme",
+    "escopo esgotado": ("leia o veredito em %s/.loop/SEM-ESCOPO — o agente mediu "
+                        "que não havia bloco em escopo. Se o escopo mudou, apague "
+                        "o arquivo (e ajuste .loop/SCOPE.md) antes de rearmar"),
     "teto de iterações": "loop-ctl retomar --raiz %s --max <N maior>",
     "sem progresso": ("leia as últimas entries em %s/.loop/entries/ — o agente "
                       "falou sem produzir; `retomar` zera o contador"),
@@ -198,9 +275,14 @@ def _avisos_de_rearme(loop, st):
     """
     avisos = []
     pend, _ = loop.contagem_fila()
-    if pend == 0:
+    if pend == 0 and not tem_relogio(st):
         avisos.append("fila vazia: o loop encerra na primeira parada. Preencha "
                       "%s/.loop/QUEUE.md antes de continuar." % loop.raiz)
+    if loop.sem_escopo:
+        avisos.append("existe %s/.loop/SEM-ESCOPO: o agente já mediu que não há "
+                      "bloco em escopo, e a próxima parada encerra citando esse "
+                      "veredito. Leia-o e apague o arquivo se o escopo mudou."
+                      % loop.raiz)
     if st.get("duracao_max_min") and \
             minutos_desde(st.get("armado_em")) >= st["duracao_max_min"]:
         avisos.append("o relógio de %d min desta rodada já estourou (armado em "
@@ -254,8 +336,18 @@ def cmd_porque(args):
                                 "loop-ctl armar --raiz %s ..." % raiz))
         return 1
 
-    print("\nNada barra: na próxima parada o loop continua para %r."
-          % (loop.proximo_item() or "—"))
+    proximo = loop.proximo_item()
+    if proximo is None and tem_relogio(st):
+        # "continua para '—'" é a resposta certa para a pergunta errada: com a fila
+        # vazia e relógio de pé, a próxima parada tem trabalho, e é outro trabalho.
+        print("\nNada barra: a fila está vazia e há relógio, então a próxima "
+              "parada é **turno de reabastecimento** — o hook manda destilar o "
+              "próximo bloco em escopo (ADR-015).")
+        print("Escopo: %s" % ("`.loop/SCOPE.md`" if loop.escopo_declarado()
+                              else "só o --objetivo (sem .loop/SCOPE.md)"))
+    else:
+        print("\nNada barra: na próxima parada o loop continua para %r."
+              % (proximo or "—"))
     for p in portoes:
         if p.ok is None and p.conserto:
             print("Atenção: %s" % p.detalhe)
@@ -285,6 +377,9 @@ def cmd_retomar(args):
         print("sem .loop/ — use `armar`")
         return 1
     st = loop.ler() or dict(PADRAO)
+    erro = _recusar_fila_vazia(loop, args, "retomar")
+    if erro:
+        return erro
     if os.path.exists(loop.p("STOP")):
         os.remove(loop.p("STOP"))
     st["ativo"] = True
@@ -346,6 +441,8 @@ def main(argv=None):
     a.add_argument("--sem-colheita", action="store_true",
                    help="não colher itens do fecho para a fila")
     a.add_argument("--sem-notificar", action="store_true")
+    a.add_argument("--mesmo-sem-fila", dest="mesmo_sem_fila", action="store_true",
+                   help="armar mesmo com zero pendentes (rodada morre na 1a parada)")
     # ── condições de fim (ADR-010) ──────────────────────────────────────────
     a.add_argument("--janela", default=None, metavar="HH:MM-HH:MM",
                    help="horário de produção, ex.: 08:00-18:00 (cruza meia-noite)")
@@ -375,6 +472,8 @@ def main(argv=None):
     r = sub.add_parser("retomar", parents=[comum])
     r.add_argument("--sessao", default=None)
     r.add_argument("--max", type=int, default=None)
+    r.add_argument("--mesmo-sem-fila", dest="mesmo_sem_fila", action="store_true",
+                   help="retomar mesmo com zero pendentes")
     r.set_defaults(func=cmd_retomar)
 
     args = ap.parse_args(argv)

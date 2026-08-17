@@ -3,7 +3,7 @@
 > **Leia também:** [README_br.md](README_br.md) (o produto, canônico) ·
 > [SECURITY.md](SECURITY.md) (**leitura obrigatória** — modelo de ameaça) ·
 > [SPEC.md](SPEC.md) (pipeline normativo e formato do `.loop/`) ·
-> [docs/decisoes.md](docs/decisoes.md) (ADR-001 a ADR-013 + pendências) ·
+> [docs/decisoes.md](docs/decisoes.md) (ADR-001 a ADR-014 + pendências) ·
 > [prompts/continuacao.md](prompts/continuacao.md) (o prompt do produto) ·
 > [version.md](version.md) (versão + formato de commit).
 >
@@ -47,14 +47,16 @@ O que **existe e roda** (`0.1.0`, 16/08/2026):
 - `skill/loop/lib/estado.py` — `.loop/` inteiro + condições de fim.
 - `skill/loop/lib/transcricao.py` — leitura pela cauda, filtro de subagente.
 - `skill/loop/loop_ctl.py` — armar/parar/retomar/status/fila/**porque**.
+- `prompts/reabastecer.md` — o item que faz a fila durar mais que o bloco
+  destilado (ADR-014).
 - `skill/loop/lib/diagnostico.py` — os portões do hook em ordem, e a cadeia de
   condições de fim em **uma** cópia (o hook consome ela) — ADR-013.
 - `skill/loop/loop_watch.py` — acompanhamento de longe (delta + tempo restante).
 - `install.sh` — hook global idempotente, `--dry-run`, `--uninstall`.
-- **171 testes**, controles verificados por mutação.
+- **228 testes**, controles verificados por mutação.
 
 ```bash
-python3 -m unittest discover -s tests -v      # 171 testes, sem modelo, sem rede
+python3 -m unittest discover -s tests -v      # 228 testes, sem modelo, sem rede
 ./install.sh --dry-run                        # mostra o que faria
 loop-watch --uma-vez --raiz <repo>            # uma leitura do acompanhamento
 ```
@@ -118,7 +120,12 @@ mensagens vagas.
     inclusive: painel não opina sobre qual condição manda. Os portões de inércia
     são espelho, provado por teste emparelhado contra o hook. `loop-ctl porque` é
     a resposta a "por que não continuou?" (ADR-013 + emenda de 17/08).
-12. `objetivo` é **reportado, nunca executado**: recusado por `armar` e
+12. Reabastecimento da fila é **item na cauda que se repõe**
+    ([prompts/reabastecer.md](prompts/reabastecer.md)), não flag — com escopo
+    declarado e escape da reposição, porque cumprir a cláusula sem insumo obriga a
+    fabricar trabalho (ADR-014). Armar sem pendente é **erro**: rodada que nasce
+    morta não roda, e ainda relatava no turno alheio.
+13. `objetivo` é **reportado, nunca executado**: recusado por `armar` e
     substituído na exibição pela mesma régua (`estado.objetivo_legivel`). O
     número de uma parada vem do **nome do arquivo**, nunca da iteração.
 

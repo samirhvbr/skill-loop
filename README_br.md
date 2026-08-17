@@ -104,7 +104,7 @@ nomeava o próximo trabalho, e um classificador só de perguntas a perderia inte
 ## Condições de fim — o loop precisa custar um valor previsível
 
 Um motor que reinicia o agente sozinho e não tem fim é uma fatura sem teto. São
-**seis** condições independentes; a primeira que bater encerra, escreve o
+**sete** condições independentes; a primeira que bater encerra, escreve o
 `STATUS.md` e dispara a notificação. As quatro primeiras são opcionais e se
 combinam livremente (ADR-010).
 
@@ -114,7 +114,8 @@ combinam livremente (ADR-010).
 | **Escopo por marcador** | `--ate TEXTO` | `--ate "3.10 VoIP"` | "vai até este item e para" |
 | **Janela de horário** | `--janela` `--dias` | `--janela 08:00-18:00 --dias seg-sex` | "produz das 8h às 18h, dia útil" |
 | **Relógio** | `--duracao` | `--duracao 6h` | teto de parede desde que armou |
-| Fila zerada | — | — | critério de pronto do ciclo |
+| Fila zerada | — | — | critério de pronto do ciclo — **só sem relógio** |
+| Escopo esgotado | o agente escreve `.loop/SEM-ESCOPO` | — | o fim que a rodada por tempo tem |
 | Teto de iterações | `--max` (200) | — | rede final |
 
 O escopo por itens conta **só a rodada atual**: `feitos_ao_armar` é o
@@ -172,10 +173,38 @@ python3 <skill>/loop_ctl.py armar --objetivo "fase 3" \
         --janela 08:00-18:00 --dias seg-sex --duracao 6h
 ```
 
-Armar sem fila não funciona: `.loop/QUEUE.md` é o que o hook injeta no `reason`,
-e sem ele a continuação vira "continue de onde parou" — o agente re-planeja a
-cada turno e o trabalho deriva. A skill lê a documentação e destila a fila antes
-de armar; é o passo que decide se o loop funciona.
+Armar sem fila não funciona **na rodada por itens** — e desde o `0.2.5` o comando
+**recusa**: `.loop/QUEUE.md` é o que o hook injeta no `reason`, e sem ele a
+continuação vira "continue de onde parou" — o agente re-planeja a cada turno e o
+trabalho deriva. A skill lê a documentação e destila a fila antes de armar; é o
+passo que decide se o loop funciona. (Na rodada por **tempo** a recusa não se
+aplica — veja abaixo.)
+
+### Fila que se reabastece — quando você quer horas, não itens
+
+Armar por tempo (`--duracao 6h`) declara que a missão é o **relógio** e que a fila
+é rascunho. Desde o `0.3.0` o motor trata assim: com relógio na mesa, `fila zerada`
+sai da cadeia de fim e a fila vazia vira **turno de reabastecimento** — o hook
+manda escolher o próximo bloco ainda não coberto dentro do escopo, ler a
+documentação dele inteira, destilar `- [ ]` no fim do `QUEUE.md` e seguir
+trabalhando (ADR-015). Você não cola nada.
+
+O que você dá é a **fronteira**, porque ela é sua: `.loop/SCOPE.md` com o que pode
+entrar e o que "para e pergunta" — o arquivo vai **verbatim** para o prompt. Sem
+ele o escopo sai do `--objetivo`, e o prompt avisa o turno de que a fronteira não
+foi declarada, mandando recusar o duvidoso.
+
+E o fim: quando a medição diz que **não há** bloco em escopo, o agente escreve o
+veredito com os números em `.loop/SEM-ESCOPO` e a rodada encerra como `escopo
+esgotado`. Esse escape não é detalhe — cumprir a cláusula de reposição sem insumo
+obriga a **fabricar trabalho**, que é pior que parar.
+
+Antes disso o mecanismo era um item na cauda da fila que se reproduzia
+([prompts/reabastecer.md](prompts/reabastecer.md)), colado à mão; ele segue sendo o
+caminho da rodada **sem** relógio. Foi ele que produziu a medição que virou motor,
+em 17/08/2026: **14 paradas seguidas sem encerrar, 13 reabastecimentos, fila de
+22 → 66 itens**, e o fim por veredito escrito — sete hipóteses tabeladas, três
+viraram bloco, três mediram zero (ADR-014).
 
 ## Acompanhar de longe
 
@@ -198,7 +227,8 @@ loop-ctl porque               # parou e não continuou? este responde por quê
     kill-switch                    ausente
     iterações 40                   restam 33
     sem progresso                  1/3 parada(s)
-    fila zerada                    2 pendente(s)
+    escopo esgotado                não (sem .loop/SEM-ESCOPO)
+    fila (não encerra)             2 pendente(s) → reabastece
     janela 05:00-22:00             fecha em 25min  ← primeira
     relógio 6h00                   resta 6h00
 
@@ -236,7 +266,9 @@ havia uma linha de log sobre nenhum deles.
 ├── INDEX.md          uma linha por parada
 ├── ASSUMPTIONS.md    o que foi decidido sem você      ← leia primeiro
 ├── STATUS.md         por que encerrou
-├── STOP              kill-switch (se existir)
+├── STOP              kill-switch, seu (se existir)
+├── SCOPE.md          fronteira do reabastecimento — opcional, lida verbatim
+├── SEM-ESCOPO        veredito do agente: não há bloco em escopo
 └── entries/NNNN-{ASK,DOC}-slug.md
 ```
 
@@ -252,7 +284,7 @@ Revisar `ASSUMPTIONS.md` não é opcional — é o preço de não ter sido inter
   68 minutos. Ela sozinha já revelou um defeito silencioso — o hook lia o
   transcript antes de o fecho do turno chegar lá, e arquivava fragmento no lugar
   do relatório (ADR-012). Quantos outros defeitos as próximas rodadas escondem,
-  ninguém sabe: 171 testes não substituem operação.
+  ninguém sabe: 228 testes não substituem operação.
 - **A fila é escrita por um modelo** a partir da documentação. Fila ruim = loop
   ruim, e isso não é detectável pelo hook.
 - **`.loop/entries/` guarda a mensagem inteira do agente.** Se ele ecoar segredo

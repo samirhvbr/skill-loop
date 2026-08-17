@@ -140,6 +140,38 @@ class TestRender(unittest.TestCase):
         # da cadeia, então é ELE que decide a próxima parada — o painel diz isso.
         self.assertIn("já bateu", texto)
 
+    def test_entry_com_byte_invalido_nao_derruba_o_painel(self):
+        # 17/08, 16:39:57: o painel renderizou certo às 16:39:27 e morreu com
+        # traceback no refresh de 30 s depois — leu uma entry no meio da gravação.
+        # `UnicodeDecodeError` é `ValueError` e passava por baixo do
+        # `except (IOError, OSError)`. Ferramenta de acompanhar de longe não pode
+        # morrer por causa do arquivo que ela acompanha.
+        # Mutação: tirar o `errors="replace"` e este teste levanta a exceção.
+        self.entry(1, "DOC")
+        with open(os.path.join(self.loop.entries, "0002-DOC-x.md"), "wb") as f:
+            f.write(b"---\nn: 2\nkind: DOC\nsinal: rela\xa3to\nts: 2026-08-17T16:39:00-03:00\n"
+                    b"decisao: continuou\n---\ncorpo\n")
+        texto, _ = self.render()
+        self.assertIn("Últimas paradas", texto)
+        self.assertIn("#1", texto)
+        # A parada estragada continua **na tela**: o byte ruim virou U+FFFD, não
+        # uma linha a menos. Sobreviver escondendo a parada seria o mesmo painel
+        # mentiroso por outro caminho — e foi assim que a primeira versão deste
+        # teste passou com o controle desligado (a mutação derrubou 0 testes).
+        self.assertIn("#2", texto)
+        self.assertIn("�", texto)
+
+    def test_fila_com_byte_invalido_ainda_conta(self):
+        # A fila é escrita pelo AGENTE e lida pelo hook no instante do `Stop` —
+        # a janela é o turno de reabastecimento (ADR-014). Exceção ali seria
+        # engolida pelo fail-open do hook e a parada se perderia em silêncio,
+        # justamente na volta em que a fila cresceu.
+        with open(self.loop.p("QUEUE.md"), "wb") as f:
+            f.write(b"# Fila\n\n- [x] feito\n- [ ] item com byte \xa3 cortado\n"
+                    b"- [ ] o segundo\n")
+        self.assertEqual(self.loop.contagem_fila(), (2, 1))
+        self.assertIn("item com byte", self.loop.proximo_item())
+
     def test_parado_avisa_que_o_hook_esta_inerte(self):
         # "PARADO" foi lido como "entre duas iterações", e o "continua" digitado
         # em 17/08 virou um turno de 2min30. Mutação: remover o aviso e o painel
@@ -201,12 +233,40 @@ class TestRender(unittest.TestCase):
     def test_rodada_viva_avisa_condicao_que_ja_bateu(self):
         # Viva, mas a fila já está em zero: a PRÓXIMA parada encerra. Isso é
         # fato medido, não previsão — e era o que o painel não dizia.
+        # Sem relógio, porque é só aí que fila zerada encerra (ADR-015).
         self.fila("- [x] tudo feito\n")
-        texto, _ = self.render()
+        st = self.loop.ler()
+        st["janela"] = st["duracao_max_min"] = None
+        texto, _ = self.render(st=st)
         ja = self._marcada(texto, "← já bateu")
         self.assertEqual(len(ja), 1)
         self.assertIn("fila zerada", ja[0])
         self.assertEqual(self._marcada(texto, "← primeira"), [])
+
+    def test_fila_zerada_com_relogio_nao_e_fim_no_painel(self):
+        # O painel de 17/08, exato: `fila zerada 0 pendente(s) ← encerrou aqui`
+        # com `relógio resta 5h22` duas linhas abaixo. Sob relógio a fila vazia
+        # virou turno de reabastecimento (ADR-015), e o painel não pode mais
+        # apontá-la como fim.
+        # Mutação: tirar o `tem_relogio(st)` do `condicoes()` e esta cai.
+        self.fila("- [x] tudo feito\n")
+        texto, _ = self.render()
+        self.assertEqual(self._marcada(texto, "← já bateu"), [])
+        fila = [l for l in texto.split("\n") if "fila (não encerra)" in l]
+        self.assertEqual(len(fila), 1)
+        self.assertIn("reabastece", fila[0])
+        # E o veredito do agente aparece como o fim que sobrou no lugar dela.
+        self.assertIn("escopo esgotado", texto)
+
+    def test_veredito_de_escopo_esgotado_ja_bateu(self):
+        # O agente escreveu o veredito: a próxima parada encerra, e o painel
+        # precisa dizer isso — é o único fim que a rodada por tempo tem antes do
+        # relógio.
+        open(self.loop.p("SEM-ESCOPO"), "w", encoding="utf-8").close()
+        texto, _ = self.render()
+        ja = self._marcada(texto, "← já bateu")
+        self.assertEqual(len(ja), 1)
+        self.assertIn("escopo esgotado", ja[0])
 
     def test_sem_condicao_batida_volta_a_valer_o_relogio(self):
         # A pergunta "quanto falta?" continua respondida quando nada bateu.
@@ -219,12 +279,28 @@ class TestRender(unittest.TestCase):
 
     def test_ordem_do_bloco_e_a_da_cadeia_do_hook(self):
         # O anti-quarta-cópia: se alguém reordenar o painel "para ficar bonito",
-        # ele volta a discordar da ordem em que o hook realmente testa.
-        linhas = lw.condicoes(self.loop, self.loop.ler(), 2, 1)
+        # ele volta a discordar da ordem em que o hook realmente testa. Só as
+        # linhas COM motivo entram na comparação: a linha da fila sob relógio é
+        # informativa e tem motivo `None` de propósito — ela não é condição de
+        # fim, e um nome ali voltaria a prometer um fim que a cadeia não cumpre.
+        st = self.loop.ler()          # armado com janela + relógio
+        linhas = lw.condicoes(self.loop, st, 2, 1)
+        self.assertEqual([m for m, _r, _t, _x in linhas if m],
+                         ["kill-switch", "teto de iterações", "sem progresso",
+                          "escopo esgotado", "fora da janela de trabalho",
+                          "duração máxima"])
+        self.assertEqual([r for m, r, _t, _x in linhas if m is None],
+                         ["fila (não encerra)"])
+
+    def test_ordem_do_bloco_sem_relogio_mantem_a_fila_como_fim(self):
+        # Rodada por itens não mudou: a fila continua sendo o critério de pronto,
+        # e continua no painel como condição de fim.
+        st = self.loop.ler()
+        st["janela"] = st["duracao_max_min"] = None
+        linhas = lw.condicoes(self.loop, st, 2, 1)
         self.assertEqual([m for m, _r, _t, _x in linhas],
                          ["kill-switch", "teto de iterações", "sem progresso",
-                          "fila zerada", "fora da janela de trabalho",
-                          "duração máxima"])
+                          "fila zerada"])
 
     def test_motivo_sem_linha_propria_ainda_aparece(self):
         # `política ASK=parar` depende de classificar a mensagem, então o painel

@@ -387,6 +387,119 @@ ADR. Decisão nova entra aqui, com data e status, no mesmo commit da mudança.
 
 ---
 
+## ADR-014 — Reabastecimento é item na cauda da fila, não flag
+
+- **Data:** 2026-08-17 · **Status:** Aceito
+- **Contexto:** o modo de uso do dono não estava previsto no produto. Ele arma por
+  **tempo** (`--duracao 6h`, sem objetivo) esperando que o loop puxe o próximo
+  documento e siga; mas `fila zerada` é a condição **#4** e o relógio é a **#6**,
+  então a fila vazia dispara sempre antes. Em três rodadas do EOP o `--duracao`
+  **nunca chegou a valer**. O desenho assumia fila destilada antes de armar, com
+  fila vazia como critério de pronto (ADR-006) — e assume ainda: o que faltava era
+  o que reabastece a fila.
+- **Decisão:** o reabastecimento é **trabalho comum**, não mecanismo: um item
+  `- [ ]` na cauda do `QUEUE.md` que manda destilar o próximo bloco e **repor-se**.
+  Canônico em [prompts/reabastecer.md](../prompts/reabastecer.md). Funciona porque
+  o hook lê o `QUEUE.md` do disco no instante do `Stop`, depois de o agente já ter
+  escrito nele. Duas cláusulas não são opcionais:
+  1. **Escopo declarado**, com o que "para e pergunta". Sem ele o reabastecimento
+     puxa trabalho que era decisão do dono, e o loop decide no lugar dele.
+  2. **Escape da reposição.** Quando a medição diz que não há bloco em escopo, o
+     item **não** se repõe: registra o veredito com os números e deixa a fila
+     zerar. Cumprir a cláusula sem insumo obriga a **fabricar** trabalho — e prosa
+     sem lastro, num repositório onde a documentação é fonte de verdade, é pior
+     que parar.
+- **Alternativa descartada:** desenhar `--reabastecer N` antes de saber como o
+  padrão se comporta. A decisão de 17/08 foi testar o contorno sem código novo
+  justamente para o teto da flag nascer **medido**. Se a flag existir um dia, o
+  número já está: 13 reposições numa rodada.
+- **Medição que fechou a decisão** (EOP, 17/08): 14 paradas seguidas **sem
+  encerrar** (`#6`…`#19`), 13 delas com o REABASTECER como item da fila, fila de
+  22 → 66 itens, intervalos de 25 · 14 · 10 · 10 · 7 min. O fim veio **por
+  veredito escrito**, não por esquecimento: das sete hipóteses tabeladas, três
+  viraram bloco, uma era dívida real e três mediram zero — e o agente quebrou a
+  cláusula de reposição de propósito, documentando o porquê no próprio `QUEUE.md`.
+- **Consequência:** a promessa de "horas sem digitar continua" passa a depender de
+  um artefato que **alguém precisa colar na fila**. Está no `SKILL.md` como passo
+  1.1 e o `armar` aponta para ele ao recusar fila vazia — mas não é automático, e
+  isso é a decisão, não um esquecimento.
+  → **Revisto pelo [ADR-015](#adr-015--fila-vazia-com-relógio-não-encerra-o-motor-reabastece)
+  em 17/08:** esta consequência caiu para a rodada **com relógio**, onde o motor
+  passou a reabastecer sozinho. As duas cláusulas normativas continuam valendo
+  integralmente, e o item na cauda segue sendo o mecanismo da rodada **sem**
+  relógio.
+- ⛔ **Não medido:** se o trabalho puxado pelo próprio loop **deriva** ao longo de
+  muitas voltas. Era a terceira pergunta do experimento e exige ler o que as 44
+  linhas novas produziram, não contá-las. Segue na P-05.
+
+---
+
+## ADR-015 — Fila vazia com relógio não encerra: o motor reabastece
+
+- **Data:** 2026-08-17 · **Status:** Aceito · **Revisa:** ADR-014 (a consequência,
+  não as cláusulas)
+- **Contexto:** a fila fazia **duas** coisas, e só uma era legítima. Como
+  **conteúdo** ela é insubstituível — o hook injeta o primeiro `- [ ]` no `reason`
+  porque "continua" sozinho faz o agente re-planejar e derivar (§4). Como
+  **condição de fim** ela mandava na cadeia inteira: `pendentes == 0` era a #4 e o
+  relógio a #6, então quem armava por tempo tinha o `--duracao` nunca chegando a
+  valer. O ADR-014 contornou sem código e pediu medição antes de qualquer flag —
+  *"se a flag existir um dia, o número já está: 13 reposições numa rodada"*. A
+  medição existe. E o guarda-corpo que nasceu daquela rodada
+  (`_recusar_fila_vazia`) passou a barrar exatamente o comando certo: o dono
+  digitou `armar --raiz ~/x/EOP --duracao 6h` sobre fila 66/66 e tomou `erro:
+  nenhum item - [ ] na fila`. Guarda-corpo que barra o caminho certo é defeito,
+  não rigor. A pergunta do dono foi a mais curta possível: *"por que o loop está
+  avaliando a fila? o trabalho do loop é meio que só dizer continua"*.
+- **Decisão:** `fila zerada` **só encerra rodada sem relógio**. Com
+  `duracao_max_min` ou `janela` declarados, a fila vazia sai da cadeia de fim e
+  vira **turno de reabastecimento**, conduzido pelo hook por um **segundo
+  template** (`prompts/reabastecimento.md`). Três peças:
+  1. **Gatilho derivado, não flag nova** (`diagnostico.tem_relogio`): quem escreveu
+     `--duracao 6h` já declarou que a missão é o relógio e a fila é rascunho.
+     `STATE.json` não muda de contrato, e estado de versão anterior cai no
+     comportamento antigo — que é o certo para rodada sem relógio.
+  2. **Escopo por `--objetivo` + `.loop/SCOPE.md`** (opcional, lido **verbatim**).
+     É a cláusula 1 do ADR-014 com endereço. Sem o arquivo o prompt **diz ao turno
+     que a fronteira não foi declarada** e manda recusar o duvidoso: quem não sabe
+     onde parar precisa saber que não sabe, senão infere uma fronteira e chama de
+     escopo.
+  3. **Fim por veredito, em `.loop/SEM-ESCOPO`** — a cláusula 2 do ADR-014 com um
+     fim próprio. O agente mede que não há bloco em escopo, escreve os números, e
+     a rodada encerra como `escopo esgotado`, com o veredito citado no `STATUS.md`.
+- **Alternativas descartadas:**
+  - **`--reabastecer N` como flag.** Redundante: quem arma por tempo quer isso
+    sempre, e uma flag a mais para lembrar é uma flag a mais para esquecer — o
+    esquecimento sendo justamente a rodada que morre na primeira parada.
+  - **Fila vazia nunca encerrar.** Mais simples de explicar e pior: rodada sem
+    relógio nem escopo ficaria sem fim natural. A fila **é** o critério de pronto
+    da rodada por itens (ADR-006), e tirar isso dela era resolver um caso quebrando
+    o outro.
+  - **Só reordenar a cadeia** (relógio antes da fila). Não basta: com fila vazia e
+    relógio de pé, o `reason` iria com `(fila vazia)` no lugar do item — uma ordem
+    para executar o que não existe.
+  - **Reusar `.loop/STOP` como veredito do agente.** Um arquivo só para ordem do
+    dono e medição do agente apagaria **quem decidiu encerrar**, que é a primeira
+    pergunta que se faz ao `STATUS.md` depois.
+- **Consequências:**
+  - `armar --duracao`/`--janela` deixa de recusar fila vazia (e avisa que a
+    primeira parada é reabastecimento, e de onde sai o escopo). Sem relógio a
+    recusa continua intacta.
+  - `loop-watch` não pode mais marcar `fila zerada` como fim sob relógio — era o
+    painel de 17/08 apontando o fim para o lugar errado, com `resta 5h22` duas
+    linhas abaixo.
+  - O anti-loop-infinito **não é novo**: `sem progresso` já cobre. Turno que repõe
+    muda a contagem da fila (entra no sha1 da impressão) e zera o contador; turno
+    que não produz nada acumula e encerra em 3. Verificado por mutação.
+  - Quatro controles, quatro mutações, 228 testes verdes: desligar o gatilho
+    derruba 10 testes; o veredito, 5; a guarda do `armar`, 4; a linha do painel, 2.
+- ⛔ **Não medido:** se o reabastecimento **conduzido pelo motor** deriva menos ou
+  mais que o conduzido pelo item na cauda. São dois prompts com as mesmas
+  cláusulas e um contexto diferente (o do motor não vê a fila que o antecedeu).
+  Junta-se à P-05.
+
+---
+
 ## Pendências
 
 | # | Pendência | Estado |

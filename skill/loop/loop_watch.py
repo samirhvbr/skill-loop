@@ -27,8 +27,9 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "lib"))
 
-from diagnostico import condicoes_de_fim, curto           # noqa: E402
-from estado import (NUM_DE_ENTRY, Loop, achar_raiz,        # noqa: E402
+from diagnostico import (condicoes_de_fim, curto,          # noqa: E402
+                         tem_relogio)
+from estado import (NUM_DE_ENTRY, Loop, achar_raiz, dur,   # noqa: E402
                     minutos_ate_fechar, minutos_desde,
                     objetivo_para_exibir)
 
@@ -43,16 +44,6 @@ class C(object):
         for k in list(vars(cls)):
             if k.isupper():
                 setattr(cls, k, "")
-
-
-def dur(minutos):
-    """Minutos → '3h07' | '24min' | '—'."""
-    if minutos is None:
-        return "—"
-    m = int(round(minutos))
-    if m <= 0:
-        return "esgotado"
-    return "%dh%02d" % divmod(m, 60) if m >= 60 else "%dmin" % m
 
 
 _ISO = re.compile(r"^(\d{4})-(\d{2})-(\d{2})T(\d{2}:\d{2})")
@@ -109,7 +100,16 @@ def ultimas_paradas(loop, quantas=4):
     for nome in nomes:
         dados = {"arquivo": nome}
         try:
-            with open(os.path.join(loop.entries, nome), encoding="utf-8") as f:
+            # `errors="replace"`: o painel lê um diretório que **outro processo
+            # escreve**, e a cada 30 s. Entry pega no meio da gravação decodifica
+            # com byte cortado, e `UnicodeDecodeError` é `ValueError` — passava
+            # por baixo do `except (IOError, OSError)` e derrubava o painel
+            # inteiro, com traceback, no lugar de uma linha ruim. Aconteceu em
+            # 17/08 às 16:39:57, no refresh seguinte a um painel que renderizou
+            # certo 30 s antes. Ferramenta de acompanhar de longe não pode morrer
+            # por causa do arquivo que ela acompanha.
+            with open(os.path.join(loop.entries, nome), encoding="utf-8",
+                      errors="replace") as f:
                 dentro = False
                 for linha in f:
                     if linha.strip() == "---":
@@ -120,7 +120,7 @@ def ultimas_paradas(loop, quantas=4):
                     m = _CAMPO.match(linha.strip()) if dentro else None
                     if m:
                         dados[m.group(1)] = m.group(2).strip().strip('"')
-        except (IOError, OSError):
+        except (IOError, OSError, UnicodeDecodeError):
             continue
         # O nome do arquivo vence o campo `n:` do front-matter — depois de lê-lo,
         # de propósito. Até 17/08 o hook gravava `n = iteracao + 1`, e `iniciar()`
@@ -167,7 +167,20 @@ def condicoes(loop, st, pendentes, feitos):
     linhas.append(("sem progresso", "sem progresso",
                    "%d/%d parada(s)" % (st.get("sem_progresso", 0),
                                         st.get("max_sem_progresso", 0)), None))
-    linhas.append(("fila zerada", "fila zerada", "%d pendente(s)" % pendentes, None))
+    if loop.sem_escopo or tem_relogio(st):
+        linhas.append(("escopo esgotado", "escopo esgotado",
+                       "DECLARADO" if loop.sem_escopo
+                       else "não (sem .loop/SEM-ESCOPO)", None))
+    if tem_relogio(st):
+        # Sob relógio a fila vazia NÃO encerra (ADR-015) — e dizer "0 pendente(s)"
+        # nesta linha, calado, foi exatamente como o painel de 17/08 apontou o fim
+        # para o lugar errado. A linha fica, porque quem lê quer saber da fila; o
+        # que ela não pode mais é parecer condição de fim.
+        linhas.append((None, "fila (não encerra)",
+                       "%d pendente(s) → reabastece" % pendentes, None))
+    else:
+        linhas.append(("fila zerada", "fila zerada",
+                       "%d pendente(s)" % pendentes, None))
     if st.get("janela"):
         falta = minutos_ate_fechar(st["janela"], st.get("dias"))
         rot = "janela %s%s" % (st["janela"],
@@ -354,9 +367,17 @@ def render(loop, st, anterior):
 
 def imprimir_status_final(loop):
     caminho = loop.p("STATUS.md")
-    if os.path.exists(caminho):
-        with open(caminho, encoding="utf-8") as f:
+    if not os.path.exists(caminho):
+        return
+    # Mesma regra da leitura das entries: o `--ate-encerrar` imprime isto no
+    # instante em que o loop encerra, que é exatamente quando o hook acabou de
+    # gravar o arquivo. Morrer aqui perderia o motivo do encerramento — o único
+    # dado que o operador está esperando.
+    try:
+        with open(caminho, encoding="utf-8", errors="replace") as f:
             print("\n" + f.read())
+    except (IOError, OSError):
+        pass
 
 
 def main(argv=None):

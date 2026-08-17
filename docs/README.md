@@ -4,7 +4,7 @@
 e estado em [`.continue/`](../.continue/); contrato normativo em
 [`SPEC.md`](../SPEC.md); prompt do produto em [`prompts/`](../prompts/).
 
-> Projeto em **F1**: motor entregue e testado (171 testes), **sem operação em
+> Projeto em **F1**: motor entregue e testado (228 testes), **sem operação em
 > trabalho real**. O que estiver marcado com ⛔ no `SPEC.md` é lacuna conhecida,
 > não esquecimento.
 

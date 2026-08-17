@@ -149,6 +149,15 @@ O texto precisa carregar, sempre:
 
 Template ausente ou ilegível → fallback embutido no hook (nunca falha).
 
+**Dois templates, um por trabalho** (ADR-015). Quando a fila está vazia e há
+relógio, o trabalho do turno não é executar item — é encher a fila —, e o hook
+devolve [prompts/reabastecimento.md](prompts/reabastecimento.md) (§5.2), com os
+placeholders `escopo` e `restante_relogio` no lugar de `item` e `pendentes`.
+Mandar o template de continuação com `(fila vazia)` no lugar do item era o caminho
+barato e o pior: uma ordem para executar o que não existe. Cada template tem seu
+próprio fallback embutido e seu próprio override por ambiente (`LOOP_TEMPLATE`,
+`LOOP_TEMPLATE_REABASTECIMENTO`).
+
 ---
 
 ## 5. Condições de fim (ADR-010)
@@ -160,19 +169,37 @@ Verificadas a cada parada, **nesta ordem**; a primeira que bater encerra:
 | 1 | kill-switch | arquivo `.loop/STOP` | — |
 | 2 | teto de iterações | `max_iteracoes` | 200 |
 | 3 | sem progresso | `sem_progresso ≥ max_sem_progresso` | 3 |
-| 4 | fila zerada | nenhum `- [ ]` | — |
-| 5 | fora da janela | `janela` + `dias` | `null` |
-| 6 | relógio | `duracao_max_min` | `null` |
-| 7 | escopo por itens | `escopo_itens` | `null` |
-| 8 | escopo por marcador | `escopo_ate` | `null` |
-| 9 | política de ASK | `politica_ask` | `continuar` |
+| 4 | escopo esgotado | arquivo `.loop/SEM-ESCOPO` | — |
+| 5 | fila zerada — **só sem relógio** | nenhum `- [ ]` | — |
+| 6 | fora da janela | `janela` + `dias` | `null` |
+| 7 | relógio | `duracao_max_min` | `null` |
+| 8 | escopo por itens | `escopo_itens` | `null` |
+| 9 | escopo por marcador | `escopo_ate` | `null` |
+| 10 | política de ASK | `politica_ask` | `continuar` |
+
+**Fila zerada só encerra rodada sem relógio** (ADR-015). Com `duracao_max_min` ou
+`janela` na mesa, a missão declarada é o **tempo** e a fila é rascunho: a fila
+vazia sai da cadeia e vira **turno de reabastecimento** (§5.2). Enquanto ela
+mandava, o `--duracao` nunca chegava a valer — três rodadas do EOP encerraram na
+iteração 1 com ~5h50 sobrando.
+
+**Escopo esgotado** é o fim que a rodada por tempo passou a ter: o **agente**
+escreve em `.loop/SEM-ESCOPO` o veredito com os números que mediu, e a parada
+seguinte encerra citando a primeira linha dele no `STATUS.md`. Arquivo separado do
+`STOP` de propósito — o kill-switch é ordem do dono, este é medição do agente, e
+um arquivo só para os dois apagaria quem decidiu encerrar. Vem **depois** de `sem
+progresso`: o teto de degeneração manda em tudo que o agente escreve, inclusive no
+veredito dele. `armar` apaga o arquivo; `retomar` não, e `porque` avisa que ele
+está lá.
 
 **Progresso** = sha1 de `git status --porcelain` + `HEAD` + contagem da fila.
 Duas paradas com a mesma impressão significam agente falando sem produzir. Fora
 de repositório git, a fila responde sozinha.
 
 **Escopo por itens** conta apenas a rodada: `feitos - feitos_ao_armar`. O
-denominador é gravado em `armar`.
+denominador é gravado em `armar`, junto de `pendentes_ao_armar` — quantos itens
+havia a fazer na hora de armar. Zero ali identifica a rodada que **nasceu morta**
+(§5.1 item 5); `None` é estado de versão anterior, e "não sei" nunca vale zero.
 
 **Janela** aceita `HH:MM-HH:MM`, cruza a meia-noite (`22:00-06:00`), e `dias`
 aceita `seg-sex` ou `seg,qua,sex`. **Formato inválido nunca encerra** — typo em
@@ -203,6 +230,47 @@ paralela — inclusive para a **ordem** em que as condições aparecem (ADR-013)
    parada seguinte encerra de vez. (O hook é um script; a tool de notificação é
    do agente — ADR-009.)
 4. `notificar: false` → `ativo = false` na hora, `systemMessage` e exit 0.
+5. **Rodada que nasceu morta não relata.** `iteracao == 1`, zero pendente agora e
+   `pendentes_ao_armar == 0` → encerra como no item 4, com `systemMessage` dizendo
+   "nada a relatar", mesmo com `notificar: true`. Armar sem pendente produz uma
+   rodada que morre na primeira parada, e o relatório cairia no turno de quem
+   estava fazendo outra coisa (três vezes em 17/08). `pendentes_ao_armar` é `None`
+   em estado de versão anterior, e "não sei" **relata**. O registro não muda:
+   `STATUS.md`, entry e `INDEX.md` são escritos igual.
+
+`armar` e `retomar` **recusam** fila sem nenhum pendente (`--mesmo-sem-fila`
+força). O aviso existia desde a primeira versão e não impediu nenhuma das três
+rodadas mortas: texto impresso depois de o estado estar gravado não é
+guarda-corpo.
+
+### 5.2 Reabastecimento da fila (ADR-014, revisto pelo ADR-015)
+
+Duas cláusulas são normativas nos dois caminhos abaixo: **escopo declarado** (com
+o que "para e pergunta") e **escape da reposição**. Sem a primeira o loop decide
+onde a decisão é do dono; sem a segunda ele fabrica trabalho para cumprir a
+cláusula — e prosa sem lastro, num repositório onde a documentação é fonte de
+verdade, é pior que parar.
+
+**Com relógio — o motor reabastece.** Fila vazia sai da cadeia de fim (§5) e o
+hook devolve o **segundo template**,
+[prompts/reabastecimento.md](prompts/reabastecimento.md), em vez do de
+continuação: o turno escolhe o próximo bloco não coberto dentro do escopo, lê a
+documentação dele **inteira**, destila `- [ ]` no fim do `QUEUE.md`, registra o que
+mediu, e segue trabalhando. O escopo vem de `.loop/SCOPE.md` **verbatim** quando
+existe; sem o arquivo, do `--objetivo`, e o prompt diz ao turno que a fronteira
+**não foi declarada** — quem não sabe onde parar precisa saber que não sabe.
+O escape é o `.loop/SEM-ESCOPO` da §5.
+
+A parada de reabastecimento é uma parada como qualquer outra: classificada,
+arquivada em `entries/`, indexada. E o guarda-corpo contra loop infinito não é
+novo — é o `sem progresso`: turno que repõe muda a contagem da fila (que entra no
+sha1 da impressão) e zera o contador; turno que não produz nada acumula e encerra.
+
+**Sem relógio — item na cauda que se reproduz.**
+[prompts/reabastecer.md](prompts/reabastecer.md) segue válido para a rodada por
+itens: uma linha `- [ ]` colada no fim do `QUEUE.md`, que faz o mesmo trabalho e
+**repõe-se** ao final. Ali a fila continua sendo o critério de pronto do ciclo, e
+o motor não tem por que assumir que existe um próximo bloco.
 
 ---
 
@@ -215,9 +283,16 @@ paralela — inclusive para a **ordem** em que as condições aparecem (ADR-013)
 ├── INDEX.md          uma linha por parada
 ├── ASSUMPTIONS.md    premissas adotadas para não parar
 ├── STATUS.md         por que encerrou (só no fim)
-├── STOP              kill-switch (presença basta)
+├── STOP              kill-switch do DONO (presença basta)
+├── SCOPE.md          escopo do reabastecimento — opcional, lido verbatim
+├── SEM-ESCOPO        veredito do AGENTE: não há bloco em escopo (presença basta)
 └── entries/NNNN-{ASK,DOC}-slug.md
 ```
+
+`SCOPE.md` é **entrada** escrita pelo dono; `SEM-ESCOPO` é **saída** escrita pelo
+agente. Nenhum dos dois é criado por `armar` — mas `armar` **apaga** o `SEM-ESCOPO`
+(junto do `STOP`) depois das guardas, para a rodada nova não morrer citando a
+medição da anterior.
 
 `STATE.json` é gravado por `os.replace` sobre temporário (nunca meio-escrito).
 JSON inválido → o hook trata como ausente e sai (fail-open).

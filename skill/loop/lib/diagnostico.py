@@ -161,6 +161,26 @@ def curto(sid):
 
 
 # ── condições de fim: a cadeia do hook, em um só lugar ──────────────────────
+def tem_relogio(st):
+    """A rodada foi armada por **tempo**? (ADR-015)
+
+    É o que decide se `fila zerada` encerra ou vira turno de reabastecimento.
+    Derivado de campos que já existem — `duracao_max_min` e `janela` —, e não de
+    flag nova: quem escreveu `--duracao 6h` já declarou que a missão é o relógio
+    e a fila é rascunho. Estado de versão anterior lê `None` nos dois e cai no
+    comportamento antigo, que é o certo para rodada sem relógio.
+    """
+    return bool(st.get("duracao_max_min") or st.get("janela"))
+
+
+def _primeira_linha(texto):
+    """Primeira linha não vazia — o detalhe cabe numa linha do STATUS/painel."""
+    for linha in (texto or "").splitlines():
+        if linha.strip():
+            return linha.strip()[:200]
+    return "veredito não escrito em .loop/SEM-ESCOPO"
+
+
 def condicoes_de_fim(loop, st, res=None, texto=None, irreversivel=None,
                      contagem=None, iteracao=None):
     """`(motivo, detalhe)` da primeira condição que encerraria, ou `None`.
@@ -168,6 +188,12 @@ def condicoes_de_fim(loop, st, res=None, texto=None, irreversivel=None,
     Esta é **a** cadeia do hook (SPEC.md §5), na ordem em que ele a testa —
     kill-switch primeiro porque é o comando explícito do dono, e política de ASK
     por último porque é a única que depende de classificar a mensagem.
+
+    **`fila zerada` só encerra rodada sem relógio** (ADR-015). Com `--duracao` ou
+    `--janela`, a fila vazia não é fim: é o gatilho do turno de reabastecimento,
+    e quem fecha a rodada é o relógio, o `escopo esgotado` escrito pelo agente,
+    ou os tetos. Enquanto a fila mandava, o `--duracao` nunca chegava a valer —
+    três rodadas do EOP encerraram na iteração 1 com ~5h50 sobrando.
 
     - `contagem`: `(pendentes, feitos)` já lido. O hook passa o seu, colhido
       **depois** da colheita de itens; recontar aqui daria número de antes.
@@ -189,7 +215,9 @@ def condicoes_de_fim(loop, st, res=None, texto=None, irreversivel=None,
         return ("sem progresso",
                 "%d paradas sem mudar árvore nem fila — loop degenerado"
                 % st.get("sem_progresso", 0))
-    if pendentes == 0:
+    if loop.sem_escopo:
+        return "escopo esgotado", _primeira_linha(loop.veredito_sem_escopo())
+    if pendentes == 0 and not tem_relogio(st):
         return "fila zerada", "%d item(ns) concluído(s)" % feitos
     if fora_da_janela(st.get("janela"), st.get("dias")):
         return ("fora da janela de trabalho",

@@ -56,6 +56,11 @@ fechar os 10 primeiros", "das 8h às 18h"). Traduza a resposta em flags:
 | "no máximo umas 6 horas" | `--duracao 6h` |
 | "até acabar" | nada — fila zerada e `--max` respondem |
 
+⚠️ **Relógio muda o que a fila significa** (ADR-015). Com `--duracao`/`--janela`,
+`fila zerada` **não** encerra: a fila vazia vira turno de reabastecimento (§1.1), e
+a rodada acaba pelo tempo, pelos tetos, ou pelo veredito que o agente escreve em
+`.loop/SEM-ESCOPO`. Sem relógio, a fila continua sendo o critério de pronto.
+
 Combinam livremente; a primeira que bater encerra. Na dúvida, prefira **duas**
 (uma de escopo e uma de tempo) — elas se cobrem quando a fila é maior ou menor
 do que parecia.
@@ -66,9 +71,11 @@ do que parecia.
 
 ### 1. Destilar a fila — o passo que decide se o loop funciona
 
-**Não arme com a fila vazia.** `.loop/QUEUE.md` é o que o hook injeta no `reason`
-a cada parada; sem ela a continuação vira "continue de onde parou", o agente
-re-planeja a cada turno e o trabalho deriva.
+**Não arme com a fila vazia** — a não ser por tempo (§1.1). `.loop/QUEUE.md` é o
+que o hook injeta no `reason` a cada parada; sem ela a continuação vira "continue
+de onde parou", o agente re-planeja a cada turno e o trabalho deriva. Sob relógio
+o motor cobre isso na primeira parada, mas mesmo ali um bloco destilado à mão é
+melhor começo: ele gasta o primeiro turno produzindo, não triando.
 
 Antes de armar:
 
@@ -88,11 +95,49 @@ Antes de armar:
 4. Mostre a fila ao usuário antes de armar. É a última chance barata de
    corrigir rumo: depois disso o agente executa sem perguntar.
 
+### 1.1 Fila que se reabastece — quando o usuário quer horas, não itens
+
+Se o pedido é por **tempo** ("me deixa isso rodando a tarde inteira", `--duracao
+6h`) e há mais documentação do que cabe numa destilação, a fila precisa se
+reabastecer. **Com relógio isso é do motor** (ADR-015): quando a fila zera, o hook
+devolve o prompt de reabastecimento — escolher o próximo bloco não coberto **dentro
+do escopo**, ler a documentação dele inteira, destilar `- [ ]` no fim do `QUEUE.md`,
+registrar o que mediu, e seguir trabalhando. Você não precisa colar nada.
+
+O que você **precisa** dar é a fronteira, porque ela é decisão do dono:
+
+- Escreva `.loop/SCOPE.md` com **o que pode entrar** e **o que para e pergunta**
+  (dinheiro, autenticação, dado de produção, decisão de produto — o que valer ali).
+  O arquivo vai **verbatim** para o prompt.
+- Sem ele, o escopo sai só do `--objetivo`, e o prompt avisa o turno de que a
+  fronteira não foi declarada — ele passa a recusar o que for duvidoso. Funciona,
+  mas é mais estreito do que precisaria ser.
+
+E o fim: se a medição disser que **não há** bloco em escopo, o agente escreve o
+veredito com os números em `.loop/SEM-ESCOPO` e a rodada encerra ali, como `escopo
+esgotado`. Fila zerada com veredito é o desfecho certo; bloco fabricado para
+cumprir a instrução é o pior de todos.
+
+**Sem relógio** (rodada por itens), o mecanismo continua sendo um **item na cauda
+que se reproduz**: copie [prompts/reabastecer.md](../../prompts/reabastecer.md),
+troque o que está entre ‹› e cole no fim do `QUEUE.md`.
+
+Medido em 17/08/2026 (EOP), com o item na cauda: 14 paradas seguidas sem encerrar,
+13 com o REABASTECER como item, fila de 22 → 66 itens, e o fim veio por veredito
+escrito — sete hipóteses tabeladas, três viraram bloco, três mediram zero. É essa
+medição que virou motor.
+
 ### 2. Armar
 
 ```bash
 python3 <skill>/loop_ctl.py armar --objetivo "<uma linha>"
 ```
+
+`armar` **recusa** fila sem nenhum pendente (`--mesmo-sem-fila` força). Não é
+capricho: rodada sem pendente morre na primeira parada, e três delas em 17/08
+ainda gastaram um turno cada para dizer que nada havia acontecido. **Com
+`--duracao`/`--janela` a recusa não se aplica** (ADR-015): ali a fila vazia não
+morre, ela reabastece.
 
 Confirme em uma linha: objetivo, quantos itens, teto de iterações, política de
 ASK, e como parar (`touch .loop/STOP` — funciona sem terminal, de qualquer
@@ -113,9 +158,13 @@ armado:
   alternativa descartada · como reverter) e siga.
 - **Marque `- [x]`** ao concluir um item, no mesmo turno, antes de seguir.
 - **Trabalho novo vira item**, não pergunta: acrescente `- [ ]` na fila.
-- **Encerre de verdade** só se a fila zerar, se existir `.loop/STOP`, se a
-  próxima ação for destrutiva/irreversível sem premissa que a cubra, ou se você
-  estiver bloqueado por algo fora do seu alcance (credencial, serviço fora do ar).
+- **Encerre de verdade** só se a fila zerar (rodada **sem** relógio), se existir
+  `.loop/STOP`, se a próxima ação for destrutiva/irreversível sem premissa que a
+  cubra, ou se você estiver bloqueado por algo fora do seu alcance (credencial,
+  serviço fora do ar).
+- **Rodada por tempo com a fila zerada:** reabasteça (o hook manda como). Só
+  encerre escrevendo o veredito medido em `.loop/SEM-ESCOPO` — e só se **não**
+  houver bloco em escopo. Nunca fabrique trabalho para manter o loop vivo.
 
 ## Acompanhar enquanto roda
 
@@ -156,7 +205,8 @@ Depois — nunca durante:
 | `.loop/INDEX.md` | uma linha por parada: tipo, sinal, decisão, item |
 | `.loop/entries/NNNN-ASK-*.md` | as paradas que eram decisão sua |
 | `.loop/ASSUMPTIONS.md` | **leia isto primeiro** — o que foi decidido sem você |
-| `.loop/QUEUE.md` | quanto andou |
+| `.loop/QUEUE.md` | quanto andou — e o que o reabastecimento puxou |
+| `.loop/SEM-ESCOPO` | o veredito: o que foi varrido e o que mediu zero |
 | `.loop/STATUS.md` | por que o loop encerrou |
 
 Revisar `ASSUMPTIONS.md` não é opcional. É o preço de não ter sido interrompido.

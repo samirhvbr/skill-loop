@@ -46,6 +46,13 @@ PADRAO = {
     "escopo_itens": None,        # fechar N itens desta rodada e parar
     "escopo_ate": None,          # parar quando o item que contém este texto for marcado
     "feitos_ao_armar": 0,
+    # Quantos pendentes existiam na hora de armar. `None` = estado escrito por
+    # versão anterior, que não media isto — e "não sei" nunca vale como zero.
+    # Zero identifica a rodada que **nasceu morta**: `fila zerada` é a condição
+    # #4 e dispara na primeira parada. Inferir isso de `feitos ==
+    # feitos_ao_armar` confundia fila trocada por inteiro com fila vazia; medir
+    # na hora de armar é um fato, não uma coincidência de contadores.
+    "pendentes_ao_armar": None,
     "politica_ask": "continuar",  # continuar | continuar-exceto-irreversivel | parar
     "sem_progresso": 0,
     "max_sem_progresso": 3,
@@ -187,6 +194,41 @@ def minutos_desde(iso):
     return (agora_dt - t0).total_seconds() / 60.0
 
 
+def dur(minutos):
+    """Minutos → '3h07' | '24min' | 'esgotado' | '—'.
+
+    Estava só no `loop_watch`, e o prompt de reabastecimento (ADR-015) precisa do
+    mesmo formato: quanto de rodada resta. Duas cópias do mesmo formatador
+    divergem na primeira borda — e a borda aqui é `0`, que não é "0min", é
+    "esgotado".
+    """
+    if minutos is None:
+        return "—"
+    m = int(round(minutos))
+    if m <= 0:
+        return "esgotado"
+    return "%dh%02d" % divmod(m, 60) if m >= 60 else "%dmin" % m
+
+
+def restante_da_rodada(st):
+    """Quanto falta para a rodada acabar por **tempo** — o menor entre relógio e
+    janela, já formatado. `None` nos dois devolve "sem limite de tempo".
+
+    Sem isto o prompt de reabastecimento diria "ainda há tempo" sem número, e um
+    turno que não sabe quanto resta trata 8 minutos como trata 4 horas.
+    """
+    candidatos = []
+    if st.get("duracao_max_min"):
+        candidatos.append(st["duracao_max_min"] - minutos_desde(st.get("armado_em")))
+    if st.get("janela"):
+        falta = minutos_ate_fechar(st["janela"], st.get("dias"))
+        if falta is not None:
+            candidatos.append(falta)
+    if not candidatos:
+        return "sem limite de tempo"
+    return dur(min(candidatos))
+
+
 def slug(texto, limite=48):
     texto = "".join(c for c in unicodedata.normalize("NFD", texto or "")
                     if unicodedata.category(c) != "Mn")
@@ -226,6 +268,39 @@ class Loop(object):
     def kill_switch(self):
         return os.path.exists(self.p("STOP"))
 
+    @property
+    def sem_escopo(self):
+        """O agente declarou que não há mais bloco em escopo (ADR-015).
+
+        Arquivo separado do `STOP` de propósito: o kill-switch é do **dono** e
+        vale como ordem; este é o **veredito do agente** ao fim de um turno de
+        reabastecimento, e vale como medição. Um arquivo só para os dois apagaria
+        quem decidiu encerrar — e é justamente essa a pergunta que o `STATUS.md`
+        precisa responder depois.
+        """
+        return os.path.exists(self.p("SEM-ESCOPO"))
+
+    def veredito_sem_escopo(self):
+        """Texto de `.loop/SEM-ESCOPO` — os números que fecharam a rodada."""
+        return self._texto("SEM-ESCOPO")
+
+    def escopo_declarado(self):
+        """Texto de `.loop/SCOPE.md`, **verbatim** — a fronteira do reabastecimento.
+
+        Verbatim porque o que importa ali é o "para e pergunta" (ADR-014
+        cláusula 1), e reescrever a fronteira do dono é a única coisa que este
+        arquivo não pode fazer. Ausente devolve `""`: o `--objetivo` responde no
+        lugar, com menos precisão e dizendo que é menos.
+        """
+        return self._texto("SCOPE.md")
+
+    def _texto(self, nome):
+        try:
+            with open(self.p(nome), encoding="utf-8") as f:
+                return f.read().strip()
+        except (IOError, OSError):
+            return ""
+
     # ── estado ──────────────────────────────────────────────────────────────
     def ler(self):
         try:
@@ -257,7 +332,7 @@ class Loop(object):
         # Denominador do escopo: quantos itens já estavam feitos quando armou.
         # Sem esta marca, "fechar 10 itens" contaria trabalho de rodadas
         # anteriores e o loop encerraria na primeira parada.
-        st["feitos_ao_armar"] = self.contagem_fila()[1]
+        st["pendentes_ao_armar"], st["feitos_ao_armar"] = self.contagem_fila()
         self.gravar(st)
         self._status_em_execucao(st)
         return st
@@ -299,8 +374,17 @@ class Loop(object):
         return cls._PROVENIENCIA.sub(" ", linha_capturada).strip()
 
     def _linhas_fila(self):
+        # `errors="replace"` porque quem escreve a fila é o **agente**, e o hook
+        # a lê no instante do `Stop` — a janela entre as duas coisas é o turno de
+        # reabastecimento (ADR-014), em que a fila muda de tamanho. Byte cortado
+        # levantaria `UnicodeDecodeError`, que é `ValueError` e passa por baixo
+        # deste `except`; lá em cima o fail-open do hook engoliria a exceção e a
+        # parada seria **perdida em silêncio** — o loop pararia de continuar
+        # justamente na volta em que a fila cresceu. Caractere trocado por U+FFFD
+        # ainda conta `- [ ]` certo; exceção não conta nada.
         try:
-            with open(self.p("QUEUE.md"), encoding="utf-8") as f:
+            with open(self.p("QUEUE.md"), encoding="utf-8",
+                      errors="replace") as f:
                 return f.read().split("\n")
         except (IOError, OSError):
             return []
@@ -349,10 +433,20 @@ class Loop(object):
         if not novos:
             return []
         cab = "\n## Colhidos automaticamente\n"
+        # Aqui a fila é lida para ser **reescrita**, e é isso que muda a regra: um
+        # fallback que assume "# Fila do loop\n" grava esqueleto por cima de tudo
+        # se a leitura falhar com o arquivo existindo. Esqueleto só vale quando
+        # não há arquivo; qualquer outra falha de leitura **desiste da colheita**,
+        # que é acessória — a fila é o contrato do ciclo e perder itens dela é
+        # pior que perder os itens colhidos desta parada.
+        existe_fila = os.path.exists(self.p("QUEUE.md"))
         try:
-            with open(self.p("QUEUE.md"), encoding="utf-8") as f:
+            with open(self.p("QUEUE.md"), encoding="utf-8",
+                      errors="replace") as f:
                 conteudo = f.read()
         except (IOError, OSError):
+            if existe_fila:
+                return []
             conteudo = "# Fila do loop\n"
         if cab.strip() not in conteudo:
             conteudo = conteudo.rstrip("\n") + "\n" + cab
@@ -479,6 +573,18 @@ class Loop(object):
                 f.write("- **Escopo da rodada:** %d de %d item(ns)\n"
                         % (feitos - st.get("feitos_ao_armar", 0), st["escopo_itens"]))
             f.write("- **Objetivo:** %s\n" % objetivo_para_exibir(st.get("objetivo")))
+            if motivo == "escopo esgotado":
+                # O veredito é o produto desta rodada: ela não fechou itens, ela
+                # mediu que não havia itens. Sem o texto aqui, o STATUS.md diz
+                # "escopo esgotado" e o número que sustenta isso fica num arquivo
+                # que ninguém abre.
+                veredito = self.veredito_sem_escopo()
+                f.write("\n> **Veredito do agente** (`.loop/SEM-ESCOPO`):\n>\n")
+                for linha in (veredito or "(arquivo vazio — veredito não escrito)").splitlines():
+                    f.write("> %s\n" % linha)
+                f.write("\n> Rodada encerrada por medição, não por ordem: havia "
+                        "relógio sobrando e a fila não tinha o que repor. Se o "
+                        "escopo mudou, apague o arquivo e rearme.\n")
             if motivo == "fora da janela de trabalho" and st.get("janela"):
                 f.write("\n> A janela %s reabre no próximo dia útil configurado. "
                         "O loop **não** se rearma sozinho: retomar é um comando "
