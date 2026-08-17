@@ -1,6 +1,6 @@
 # Versão — skill-LOOP
 
-**Versão atual:** `0.2.1`
+**Versão atual:** `0.2.2`
 
 > Este arquivo é a **fonte da verdade** da versão do projeto. Qualquer lugar que
 > precise exibir ou reportar a versão extrai o **primeiro número semver (`X.Y.Z`)**
@@ -60,6 +60,53 @@ da mesma entrega repetem a versão.
 ---
 
 ## 3. Changelog
+
+### `0.2.2` — 2026-08-17 — o fail-open era mudo: `loop-ctl porque`
+
+Hoje o "continua" digitado no EOP não continuou, e a investigação à mão levou uma
+manhã. O hook estava certo: `ativo: false` desde 16/08 às 21:19, e ele sai no
+primeiro portão com `exit 0` sem escrever nada (ADR-009). **Havia três portões
+fechados no mesmo `.loop/`** e nenhuma linha de log sobre nenhum: o `ativo`, o
+`session_id` da sessão de ontem, e o relógio de 2 h estourado. O defeito não é o
+portão — é não haver como perguntar (ADR-013).
+
+- **`loop-ctl porque`** percorre os portões na ordem em que o hook os testa —
+  hook instalado, `.loop/`, `ativo`, `fase`, amarração à sessão — para no
+  primeiro que barra, e segue para as condições de fim quando nenhum barra. Sai
+  `1` quando algo barra, `0` quando o loop continuaria. Alias: `diagnostico`.
+- **A cadeia de condições de fim passa a ter uma cópia só**
+  (`lib/diagnostico.py::condicoes_de_fim`), consumida pelo hook em vez da própria
+  cadeia `if/elif`. A lista já vivia em três lugares; uma quarta apodreceria, e
+  diagnóstico que mente sobre a ordem é pior que nenhum.
+- **`retomar` re-amarra a sessão** (emenda do ADR-008): limpa o `session_id`, a
+  menos que `--sessao` venha explícito. Quem retoma retoma no dia seguinte, em
+  sessão nova — e o id preservado fazia o hook sair em silêncio no portão da
+  sessão. `retomar` também avisa quando a fila está vazia ou o relógio estourou,
+  os dois fatos que reativar **não** conserta (relógio pede `armar`).
+- **O painel do `loop-watch` diz "hook inerte"** quando o loop está parado, com
+  a linha da sessão amarrada. "PARADO" era lido como "entre duas iterações".
+- `--raiz` passa a valer **antes ou depois** do subcomando: a ordem natural era
+  erro de uso, justamente no comando que socorre quem está no escuro.
+
+**54 testes novos** (49 em `tests/test_diagnostico.py`, 5 em `test_watch.py`),
+total **155**. Entre eles o que impede o espelho de desalinhar: cada estado que faz o
+hook calar vai ao hook (subprocesso) **e** ao diagnóstico, e o silêncio de um tem
+de corresponder ao portão nomeado pelo outro.
+
+Mutação de cada controle novo, com o número de testes que cada uma derruba:
+
+| Controle desligado | Testes que caem |
+|---|---|
+| `retomar` volta a preservar o `session_id` | 1 |
+| painel sem o aviso de hook inerte | 2 |
+| painel sem a linha da sessão amarrada | 1 |
+| portão `ativo` informa em vez de barrar | 4 |
+| portão da sessão não barra | 3 |
+| settings ilegível vira veredito de hook ausente | 3 |
+| kill-switch deixa de vir primeiro na cadeia | 5 |
+| `condicoes_de_fim` reconta a fila em vez de usar a contagem recebida | 1 |
+| avisos de rearme (fila vazia, relógio) desligados | 3 |
+| `--raiz` volta a valer só antes do subcomando | 1 |
 
 ### `0.2.1` — 2026-08-16 — `loop-watch`: acompanhar de longe
 

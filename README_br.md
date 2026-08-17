@@ -154,8 +154,9 @@ todos rodam — só o LOOP devolve `decision: block`.
 ```
 /loop-work <objetivo>     destila a fila da documentação e arma
 /loop-work status         onde está
+/loop-work porque         por que não continuou
 /loop-work parar          desarma
-/loop-work retomar        rearma de onde parou
+/loop-work retomar        rearma de onde parou (re-amarra a sessão)
 ```
 
 Com condições de fim explícitas (recomendado para deixar rodando sozinho):
@@ -180,6 +181,8 @@ de armar; é o passo que decide se o loop funciona.
 loop-watch                    # a cada 30 s
 loop-watch --ate-encerrar     # sai com sino quando o loop parar
 loop-watch --uma-vez >> registro.log
+
+loop-ctl porque               # parou e não continuou? este responde por quê
 ```
 
 ```
@@ -206,6 +209,13 @@ loop-watch --uma-vez >> registro.log
 O `watch -n 30 status` repinta a mesma tela; isto responde **andou?** e
 **quanto falta?** — as duas perguntas de quem não está olhando.
 
+Com o loop parado, o painel avisa que o **hook está inerte**: digitar "continua"
+no chat não reativa nada. `loop-ctl porque` diz qual portão barrou — hook
+instalado, `.loop/`, `ativo`, `fase`, amarração à sessão, e depois as condições
+de fim — e qual é o conserto. Ele existe porque o hook é fail-open e sai calado
+por desenho: em 17/08 três portões estavam fechados no mesmo `.loop/` e não
+havia uma linha de log sobre nenhum deles.
+
 ## O que fica registrado
 
 ```
@@ -231,7 +241,7 @@ Revisar `ASSUMPTIONS.md` não é opcional — é o preço de não ter sido inter
   68 minutos. Ela sozinha já revelou um defeito silencioso — o hook lia o
   transcript antes de o fecho do turno chegar lá, e arquivava fragmento no lugar
   do relatório (ADR-012). Quantos outros defeitos as próximas rodadas escondem,
-  ninguém sabe: 101 testes não substituem operação.
+  ninguém sabe: 155 testes não substituem operação.
 - **A fila é escrita por um modelo** a partir da documentação. Fila ruim = loop
   ruim, e isso não é detectável pelo hook.
 - **`.loop/entries/` guarda a mensagem inteira do agente.** Se ele ecoar segredo

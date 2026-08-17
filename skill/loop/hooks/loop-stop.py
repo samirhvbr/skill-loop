@@ -34,8 +34,8 @@ _AQUI = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(_AQUI), "lib"))
 
 from classificador import classificar          # noqa: E402
-from estado import (Loop, achar_raiz, agora, fora_da_janela,   # noqa: E402
-                    minutos_desde)
+from diagnostico import condicoes_de_fim       # noqa: E402
+from estado import Loop, achar_raiz, agora     # noqa: E402
 from transcricao import ultima_mensagem        # noqa: E402
 
 # repo/skill/loop/hooks → repo
@@ -196,38 +196,15 @@ def principal():
     pendentes, feitos = loop.contagem_fila()
     item = loop.proximo_item()
 
-    motivo = detalhe = None
-    if loop.kill_switch:
-        motivo, detalhe = "kill-switch", "existe .loop/STOP"
-    elif n > st.get("max_iteracoes", 200):
-        motivo, detalhe = "teto de iterações", "%d atingido" % st["max_iteracoes"]
-    elif st["sem_progresso"] >= st.get("max_sem_progresso", 3):
-        motivo = "sem progresso"
-        detalhe = ("%d paradas sem mudar árvore nem fila — loop degenerado"
-                   % st["sem_progresso"])
-    elif pendentes == 0:
-        motivo, detalhe = "fila zerada", "%d item(ns) concluído(s)" % feitos
-    elif fora_da_janela(st.get("janela"), st.get("dias")):
-        motivo = "fora da janela de trabalho"
-        detalhe = "janela %s%s" % (st.get("janela"),
-                                   " (%s)" % st["dias"] if st.get("dias") else "")
-    elif st.get("duracao_max_min") and \
-            minutos_desde(st.get("armado_em")) >= st["duracao_max_min"]:
-        motivo = "duração máxima"
-        detalhe = "%d min de relógio desde que armou" % st["duracao_max_min"]
-    elif st.get("escopo_itens") and \
-            (feitos - st.get("feitos_ao_armar", 0)) >= st["escopo_itens"]:
-        motivo = "escopo concluído"
-        detalhe = "%d item(ns) fechados nesta rodada" % st["escopo_itens"]
-    elif st.get("escopo_ate") and loop.feito_contem(st["escopo_ate"]):
-        motivo = "escopo concluído"
-        detalhe = "marcador alcançado: %s" % st["escopo_ate"]
-    elif res.kind == "ASK" and st.get("politica_ask") == "parar":
-        motivo, detalhe = "política ASK=parar", res.sinal
-    elif res.kind == "ASK" and st.get("politica_ask") == "continuar-exceto-irreversivel":
-        gatilhos = _irreversivel(texto)
-        if gatilhos:
-            motivo, detalhe = "ação irreversível", gatilhos[0]
+    # A cadeia de condições mora em `lib/diagnostico.py`, e não aqui, para que
+    # `loop-ctl porque` mostre **a** ordem em que este hook decide — e não uma
+    # cópia dela, que apodreceria na primeira condição nova. `contagem` vai
+    # pronta porque a colheita de itens acabou de mexer na fila: recontar lá
+    # daria o número de antes.
+    fim = condicoes_de_fim(loop, st, res=res, texto=texto,
+                           irreversivel=_irreversivel,
+                           contagem=(pendentes, feitos))
+    motivo, detalhe = fim if fim else (None, None)
 
     decisao = "encerrou: %s" % motivo if motivo else "continuou"
     caminho = loop.gravar_entry(n, res, texto, {

@@ -27,16 +27,19 @@ item nomeado.
 | `/loop-work <objetivo em texto>` | destila a fila e arma |
 | `/loop-work` (sem argumento) | destila a fila e arma, inferindo o objetivo do contexto |
 | `/loop-work status` | relatório do ciclo |
+| `/loop-work porque` | por que não continuou — os portões do hook, em ordem |
 | `/loop-work parar` | desarma |
-| `/loop-work retomar` | rearma de onde parou |
+| `/loop-work retomar` | rearma de onde parou, **re-amarrando a sessão** |
 | `/loop-work fila` | mostra pendentes e o próximo |
 
 O motor é `loop_ctl.py`, ao lado deste arquivo:
 
 ```bash
 python3 <skill>/loop_ctl.py armar --objetivo "..." [condições de fim]
-python3 <skill>/loop_ctl.py status | parar | retomar | fila
+python3 <skill>/loop_ctl.py status | porque | parar | retomar | fila
 ```
+
+`--raiz` vale antes ou depois do subcomando.
 
 ### Condições de fim — pergunte antes de armar
 
@@ -127,7 +130,22 @@ loop-watch --uma-vez        # uma leitura e sai, para log ou cron
 
 Ele mostra o que o `status` cru não mostra: **delta desde a última leitura**
 (andou?) e **tempo restante de cada condição de fim**, com a que bate primeiro
-marcada. ASK e fecho parcial aparecem sinalizados na lista de paradas.
+marcada. ASK e fecho parcial aparecem sinalizados na lista de paradas. Com o
+loop parado, o painel avisa que o **hook está inerte** — digitar "continua" no
+chat não reativa nada.
+
+E quando o agente parar sem entrar em loop:
+
+```bash
+loop-ctl porque --raiz <repo>          # sai 1 se algum portão barra
+loop-ctl porque --raiz <repo> --sessao <session_id>   # confere a amarração
+```
+
+Ele percorre os portões na ordem em que o hook os testa — hook instalado,
+`.loop/`, `ativo`, `fase`, amarração à sessão — e depois as condições de fim,
+dizendo qual barrou e qual é o conserto. Existe porque o hook é fail-open e sai
+calado (ADR-009): em 17/08 havia três portões fechados no mesmo `.loop/` e
+nenhuma linha de log sobre nenhum deles.
 
 ## Ler o que ficou registrado
 

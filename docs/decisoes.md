@@ -164,6 +164,12 @@ ADR. Decisão nova entra aqui, com data e status, no mesmo commit da mudança.
   ignorada. `--qualquer-sessao` desliga para quem quiser o contrário.
 - **Alternativa descartada:** exigir que o usuário passe o id à mão (ninguém
   sabe de cor) ou ler o transcript para inferi-lo (frágil e indireto).
+- **Emenda (2026-08-17):** `retomar` também limpa o `session_id`. A decisão é a
+  mesma — auto-bind na primeira parada — aplicada ao segundo comando que reativa
+  o loop. O que faltava: `retomar` preservava o id da rodada anterior, e como
+  quem retoma retoma no dia seguinte, em sessão nova, o hook saía **em silêncio**
+  no portão da sessão. Custo medido: uma manhã de 17/08 achando que o loop estava
+  rodando. `--sessao` continua atalhando para quem sabe o id.
 
 ---
 
@@ -289,6 +295,42 @@ ADR. Decisão nova entra aqui, com data e status, no mesmo commit da mudança.
   é a forma do próprio transcript.
 - **Consequência declarada:** o hook passa a poder gastar até 3 s numa parada.
   É o preço de arquivar o texto certo, e o loop já é assíncrono por natureza.
+
+---
+
+## ADR-013 — O silêncio do fail-open precisa de um comando que fale
+
+- **Data:** 2026-08-17 · **Status:** Aceito
+- **Contexto:** em 17/08 o "continua" digitado no EOP não continuou, e a
+  investigação à mão levou uma manhã para achar **três** portões fechados no
+  mesmo `.loop/`: `ativo: false`, `session_id` da rodada de ontem, e relógio de
+  2 h estourado. O hook estava certo em cada um — ele é fail-open e sai `exit 0`
+  sem escrever nada (ADR-009), e é isso que impede um hook global de travar o
+  Claude Code da máquina. O defeito não é o portão; é **não haver como
+  perguntar**.
+- **Decisão:**
+  1. `loop-ctl porque` percorre os portões na ordem em que o hook os testa e
+     nomeia o primeiro que barra, com o conserto — inclusive as condições de fim
+     e os dois fatos que reativar não conserta (fila vazia, relógio estourado).
+     Sai `1` quando algo barra, `0` quando o loop continuaria.
+  2. A cadeia de condições de fim passa a ter **uma** cópia
+     (`lib/diagnostico.py::condicoes_de_fim`), consumida pelo hook. Diagnóstico
+     que mente sobre a ordem é pior que nenhum, e a lista já existia em três
+     lugares.
+  3. Os portões anteriores a qualquer mutação continuam **espelho**, não fonte:
+     o hook muta estado em dois deles (consome `fase: encerrando`, auto-amarra) e
+     mutação não cabe num diagnóstico. O preço do espelho é teste emparelhado —
+     o mesmo estado vai ao hook (subprocesso) e ao espelho, e o silêncio de um
+     tem de corresponder ao portão nomeado pelo outro.
+  4. O painel do `loop-watch` diz "hook inerte" quando o loop está parado:
+     "PARADO" era lido como "entre duas iterações".
+- **Alternativa descartada:** o hook passar a logar por que saiu. Log em portão
+  de inércia contraria o motivo de o portão existir (sair em milissegundos, em
+  qualquer repositório da máquina, sem escrever em disco fora de `.loop/`), e
+  ainda assim não responderia a pergunta em repositório onde o `.loop/` nunca
+  existiu.
+- **Consequência:** "não continuou" deixa de ser investigação e passa a ser um
+  comando. `loop-ctl porque` antes de sair de perto do monitor é o rito novo.
 
 ---
 

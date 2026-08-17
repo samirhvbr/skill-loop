@@ -21,7 +21,7 @@ and hands the agent back the next item on the queue.
 > [skill-COMMITTER](https://github.com/samirhvbr/skill-COMMITTER).
 > Status: **first real run done** (2026-08-16, 21/21 queue items closed in 68 min,
 > two stops) — and its audit found the product's central defect, now fixed (ADR-012).
-> 101 tests.
+> 155 tests.
 
 ## The problem, measured
 
@@ -152,8 +152,9 @@ returns `decision: block`.
 ```
 /loop-work <objective>    distil the queue from your docs and arm
 /loop-work status         where it stands
+/loop-work porque         why it did not continue
 /loop-work parar          disarm
-/loop-work retomar        re-arm from where it stopped
+/loop-work retomar        re-arm from where it stopped (re-binds the session)
 ```
 
 Arming with an empty queue does not work: `.loop/QUEUE.md` is what the hook
@@ -168,12 +169,22 @@ decides whether the loop works at all.
 loop-watch                    # refresh every 30s
 loop-watch --ate-encerrar     # exit (with a bell) when the loop stops
 loop-watch --uma-vez >> run.log
+
+loop-ctl porque               # stopped and did not continue? this says why
 ```
 
 `watch -n 30 status` repaints the same screen; this answers the two questions
 you actually have when you are not looking: **did it move?** (delta since the
 last read) and **how much is left?** (time remaining on every end condition,
 with the one about to trigger marked). ASK stops and partial closes are flagged.
+
+When the loop is stopped, the panel says so in as many words: the **hook is
+inert**, and typing "continua" in the chat reactivates nothing. `loop-ctl porque`
+walks the gates in the order the hook tests them — hook installed, `.loop/`,
+`ativo`, `fase`, session binding, then every end condition — and names the one
+that blocked plus its fix. It exists because the hook is fail-open and exits
+silently by design: on 17/08 three gates were shut in the same `.loop/` and there
+was not one line of log about any of them.
 
 ## What gets recorded
 
@@ -197,7 +208,7 @@ interrupted.
   PT-BR/EN lexicon reads as DOC and the loop continues without recording that the
   decision was yours. The fence is `ASSUMPTIONS.md` and `INDEX.md`, reviewed
   afterwards — not detector precision.
-- **No field numbers.** The engine has 101 tests; real operation is the next phase.
+- **No field numbers.** The engine has 155 tests; real operation is the next phase.
 - **The queue is written by a model** from your documentation. A bad queue means
   a bad loop, and the hook cannot detect that.
 - **`.loop/entries/` stores the agent's full message.** If it echoes a secret in

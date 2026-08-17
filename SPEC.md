@@ -220,6 +220,18 @@ de dentro da sessão). A **primeira parada** grava o seu — é necessariamente 
 sessão que armou. Depois disso, outra sessão no mesmo repositório é ignorada
 (ADR-008). `--qualquer-sessao` desliga.
 
+`retomar` **limpa** o `session_id` (a menos que `--sessao` venha explícito): quem
+retoma quase sempre retoma no dia seguinte, em sessão nova, e manter o id da
+rodada anterior fazia o hook sair em silêncio no portão da sessão. `retomar`
+também **não** zera `armado_em` — rodada com relógio estourado precisa de `armar`,
+e os dois comandos avisam quando é o caso.
+
+**Diagnóstico:** os portões anteriores a qualquer mutação (hook instalado,
+`.loop/`, `ativo`, `fase`, amarração) e a cadeia de condições de fim ficam em
+`lib/diagnostico.py`, que `loop_ctl.py porque` imprime na ordem em que o hook os
+testa. A cadeia tem **uma** cópia: o hook consome `condicoes_de_fim` em vez de
+repetir a lista.
+
 ---
 
 ## 8. Fora de escopo da v1 (não relitigar sem ADR)

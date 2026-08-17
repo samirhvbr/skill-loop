@@ -123,6 +123,11 @@ da máquina inteira — em **todos** os repositórios, não só nos que usam o L
 - [x] ✅ Instalador **anexa** grupo e preserva os hooks `Stop` existentes —
       verificado contra uma cópia do `settings.json` real, com backup datado
       antes de escrever.
+- [x] ✅ O diagnóstico (`loop-ctl porque`) **lê** o `settings.json` — só para
+      responder se o hook está registrado — e **nunca escreve** nele. Leitura que
+      falha vale `None` ("não sei dizer"), não `False`: fail-open também no
+      diagnóstico, e o caminho vem de `CLAUDE_SETTINGS` quando definido, o que é
+      o que mantém a suíte fora do arquivo real da máquina.
 
 ## T-06 — Injeção pelo conteúdo da mensagem
 

@@ -3,7 +3,7 @@
 > **Leia também:** [README_br.md](README_br.md) (o produto, canônico) ·
 > [SECURITY.md](SECURITY.md) (**leitura obrigatória** — modelo de ameaça) ·
 > [SPEC.md](SPEC.md) (pipeline normativo e formato do `.loop/`) ·
-> [docs/decisoes.md](docs/decisoes.md) (ADR-001 a ADR-011 + pendências) ·
+> [docs/decisoes.md](docs/decisoes.md) (ADR-001 a ADR-013 + pendências) ·
 > [prompts/continuacao.md](prompts/continuacao.md) (o prompt do produto) ·
 > [version.md](version.md) (versão + formato de commit).
 >
@@ -46,13 +46,15 @@ O que **existe e roda** (`0.1.0`, 16/08/2026):
 - `skill/loop/hooks/loop-stop.py` — o hook, com fail-open absoluto.
 - `skill/loop/lib/estado.py` — `.loop/` inteiro + condições de fim.
 - `skill/loop/lib/transcricao.py` — leitura pela cauda, filtro de subagente.
-- `skill/loop/loop_ctl.py` — armar/parar/retomar/status/fila.
+- `skill/loop/loop_ctl.py` — armar/parar/retomar/status/fila/**porque**.
+- `skill/loop/lib/diagnostico.py` — os portões do hook em ordem, e a cadeia de
+  condições de fim em **uma** cópia (o hook consome ela) — ADR-013.
 - `skill/loop/loop_watch.py` — acompanhamento de longe (delta + tempo restante).
 - `install.sh` — hook global idempotente, `--dry-run`, `--uninstall`.
-- **101 testes**, controles verificados por mutação.
+- **155 testes**, controles verificados por mutação.
 
 ```bash
-python3 -m unittest discover -s tests -v      # 101 testes, sem modelo, sem rede
+python3 -m unittest discover -s tests -v      # 155 testes, sem modelo, sem rede
 ./install.sh --dry-run                        # mostra o que faria
 loop-watch --uma-vez --raiz <repo>            # uma leitura do acompanhamento
 ```
@@ -103,11 +105,16 @@ mensagens vagas.
 6. `QUEUE.md` é a fonte do próximo passo — não a todo list nativa (ADR-006).
 7. Hook global, opt-in por `.loop/`, em grupo próprio no `settings.json`
    (ADR-007).
-8. Amarração à sessão por auto-bind na primeira parada (ADR-008).
+8. Amarração à sessão por auto-bind na primeira parada — e `retomar` **limpa** o
+   `session_id` para re-amarrar (ADR-008 + emenda de 17/08).
 9. **Fail-open absoluto**; a notificação push é emitida pelo agente, não pelo
    hook (ADR-009).
 10. Condições de fim combináveis: escopo por itens, por marcador, janela de
     horário, relógio (ADR-010).
+11. A cadeia de condições de fim tem **uma** cópia (`lib/diagnostico.py`, o hook
+    consome); os portões de inércia são espelho, provado por teste emparelhado
+    contra o hook. `loop-ctl porque` é a resposta a "por que não continuou?"
+    (ADR-013).
 
 E o que o LOOP **nunca** faz: agir sem `.loop/` armado, criar `.loop/` sozinho,
 apagar ou reescrever `ASSUMPTIONS.md`, escrever fora de `.loop/`, chamar rede ou

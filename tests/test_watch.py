@@ -132,6 +132,41 @@ class TestRender(unittest.TestCase):
         texto, _ = self.render()
         self.assertIn("kill-switch PRESENTE", texto)
 
+    def test_parado_avisa_que_o_hook_esta_inerte(self):
+        # "PARADO" foi lido como "entre duas iterações", e o "continua" digitado
+        # em 17/08 virou um turno de 2min30. Mutação: remover o aviso e o painel
+        # volta a deixar o operador esperando por um loop que não existe.
+        st = self.loop.ler()
+        st["ativo"] = False
+        texto, _ = self.render(st=st)
+        self.assertIn("hook inerte", texto)
+        self.assertIn("loop-ctl porque", texto)
+
+    def test_encerrando_tambem_e_inercia(self):
+        # `fase: encerrando` ainda tem ativo=true, mas a próxima parada encerra
+        # sem classificar: para quem acompanha, é parada.
+        st = self.loop.ler()
+        st["fase"] = "encerrando"
+        texto, _ = self.render(st=st)
+        self.assertIn("hook inerte", texto)
+
+    def test_loop_rodando_nao_avisa_nada(self):
+        texto, _ = self.render()
+        self.assertNotIn("hook inerte", texto)
+
+    def test_mostra_a_sessao_amarrada(self):
+        st = self.loop.ler()
+        st["session_id"] = "6bd4ebd5-599f-4ccc-9e8a-a6e0933daf46"
+        texto, _ = self.render(st=st)
+        self.assertIn("6bd4ebd5…", texto)
+
+    def test_sem_amarracao_nao_inventa_linha(self):
+        st = self.loop.ler()
+        st["bind_session"] = False
+        st["session_id"] = "6bd4ebd5-599f"
+        texto, _ = self.render(st=st)
+        self.assertNotIn("6bd4ebd5", texto)
+
 
 class TestCli(unittest.TestCase):
 

@@ -26,6 +26,7 @@ import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "lib"))
 
+from diagnostico import curto                             # noqa: E402
 from estado import (Loop, achar_raiz, fora_da_janela,      # noqa: E402
                     minutos_ate_fechar, minutos_desde)
 
@@ -141,6 +142,19 @@ def render(loop, st, anterior):
         C.NEG, C.AZUL, os.path.basename(loop.raiz), time.strftime("%H:%M:%S"), C.RESET))
     L.append("  %s%s%s   iteração %d/%d"
              % (cor + C.NEG, estado, C.RESET, it, st.get("max_iteracoes", 0)))
+    # O painel dizia "PARADO" e o operador lia "está entre duas iterações".
+    # Parado é inerte: o hook sai no primeiro portão e o chat não tem como
+    # reativá-lo — foi assim que um "continua" digitado em 17/08 virou um turno
+    # de 2min30 e mais nada. `porque` no lugar de `armar`/`retomar` porque o
+    # verbo certo depende do portão, e só ele sabe qual é.
+    if not ativo or fase == "encerrando":
+        L.append("  %s%s⚠ hook inerte — \"continua\" no chat não reativa%s"
+                 % (C.VERM, C.NEG, C.RESET))
+        L.append("    %so que fazer: loop-ctl porque --raiz %s%s"
+                 % (C.VERM, loop.raiz, C.RESET))
+    if st.get("bind_session") and st.get("session_id"):
+        L.append("  %ssessão %s — outra sessão no mesmo repo é ignorada%s"
+                 % (C.DIM, curto(st["session_id"]), C.RESET))
     if st.get("objetivo"):
         L.append("  %s%s%s" % (C.DIM, st["objetivo"][:96], C.RESET))
     L.append("")
