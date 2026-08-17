@@ -1,6 +1,6 @@
 # Versão — skill-LOOP
 
-**Versão atual:** `0.1.0`
+**Versão atual:** `0.2.0`
 
 > Este arquivo é a **fonte da verdade** da versão do projeto. Qualquer lugar que
 > precise exibir ou reportar a versão extrai o **primeiro número semver (`X.Y.Z`)**
@@ -61,6 +61,40 @@ da mesma entrega repetem a versão.
 
 ## 3. Changelog
 
+### `0.2.0` — 2026-08-16 — primeira rodada real, e o defeito que ela revelou
+
+**O loop rodou em trabalho de verdade** (EOP, 20:11→21:19): armado com fila de
+21 itens e janela até 22h, fechou **21/21**, encerrou pela condição declarada
+(fila zerada), mandou o agente enviar a push notification e parou. **Duas
+paradas em 68 minutos** — uma única continuação substituiu o "continua" que
+custaria 10 minutos de tela apagada. Saldo do outro lado: 72 arquivos tocados,
+`version.md` do EOP de 1.27.11 → 1.29.0, ADR-081 escrito lá, e um
+`ASSUMPTIONS.md` registrando as três premissas com o custo de desfazer cada uma.
+
+**E a auditoria da rodada achou o defeito central do produto (ADR-012).** As
+duas `entries` arquivadas eram **fragmentos de meio de raciocínio**, não
+relatórios: o hook `Stop` dispara antes de o Claude Code gravar o último bloco
+de texto no JSONL. Na parada #2 ele leu às 00:19:22 um texto de **00:12:30** —
+154 entradas atrás — enquanto o relato verdadeiro era escrito naquele segundo.
+Ler o retorno e documentá-lo **é** o produto, e ele documentava a coisa errada,
+em silêncio: a decisão de continuar não depende do texto, então nada denunciava.
+O único sinal era o `confianca: media` que o classificador registrou nas duas.
+
+**Conserto:** a leitura passa a responder se o texto é o **fecho do turno**
+(nada do agente principal depois dele) e **espera** até 3 s pelo fecho, relendo
+a cada 100 ms. Estourando, segue mesmo assim — mas grava `fecho_do_turno:
+PARCIAL`, derruba a confiança para `baixa` e diz na evidência que aquilo não é
+o relatório. Subagente não conta como conteúdo depois; `AskUserQuestion` fecha
+o turno por si e não gera espera.
+
+**11 testes novos** (`tests/test_transcricao.py`), com a corrida reproduzida de
+verdade: o fecho é escrito por outra thread **durante** a espera. Total **83**.
+Mutação: desligar a espera derruba as duas regressões e devolve exatamente o
+comportamento de 16/08.
+
+**Ainda não feito:** a espera resolve a corrida do fecho, não mede quanto dela
+sobra em sessões maiores — o teto de 3 s é escolha, não medição (P-07).
+
 ### `0.1.0` — 2026-08-16 — F0 e F1: proposta fechada e motor determinístico
 
 Nasce a skill que faz o agente trabalhar sem "continua" a cada cinco minutos.
@@ -75,7 +109,7 @@ registrada; classificação por **zona e direção**, não por pontuação; iten
 fecho e pendências declaradas viram fila; `QUEUE.md` é a fonte do próximo passo;
 fail-open; auto-amarração à sessão; notificação push pelo próprio agente.
 
-**Entregue e testado** — 59 testes, controles verificados por mutação:
+**Entregue e testado** — 72 testes, controles verificados por mutação:
 
 - `skill/loop/lib/classificador.py` — ASK × DOC por zona de fecho, supressão de
   retórica auto-respondida, léxico de handoff PT-BR/EN, colheita de itens com

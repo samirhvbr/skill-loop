@@ -249,6 +249,49 @@ ADR. Decisão nova entra aqui, com data e status, no mesmo commit da mudança.
 
 ---
 
+## ADR-012 — O hook espera o fecho do turno antes de ler
+
+- **Data:** 2026-08-16 · **Status:** Aceito
+- **Contexto — defeito medido em produção, na primeira rodada real.** O loop
+  rodou no EOP das 20:11 às 21:19 e fechou 21/21 itens. Ao auditar o
+  `.loop/entries/`, as duas mensagens arquivadas eram **fragmentos de meio de
+  raciocínio**, não relatórios: *"O controle em que apoiei a correção também
+  não tem testemunha. Vou fechar:"* e *"**D1** — releitura: conferindo cada
+  afirmação nova contra a fonte."*
+- **Causa, medida no transcript:** o hook `Stop` dispara **antes** de o Claude
+  Code terminar de gravar o último bloco de texto no JSONL. Na parada #2, o
+  hook leu às 00:19:22 e o texto mais recente no arquivo era de **00:12:30** —
+  154 entradas atrás, com 21 `assistant[tool_use]` e seus `tool_result` entre
+  os dois. O relato verdadeiro (*"Fila zerada — 21/21…"*) tinha timestamp
+  **00:19:22**: estava sendo escrito naquele instante.
+- **Gravidade:** é a promessa central do produto falhando **em silêncio**. Ler o
+  retorno e documentá-lo era o produto; ele documentava a coisa errada. E o
+  loop seguiu funcionando, porque a decisão de continuar não depende do texto —
+  então nada denunciava o defeito, exceto o `confianca: media` que o próprio
+  classificador registrou nas duas entries (não achou marca de relato nenhuma
+  porque não estava lendo relato nenhum).
+- **Decisão:**
+  1. A leitura passa a responder **se o texto encontrado é o fecho do turno**:
+     é fecho quando não há conteúdo do agente principal depois dele. `tool_use`
+     e `tool_result` depois = resto velho.
+  2. Sendo resto velho, o hook **espera** (releitura a cada 100 ms) até
+     `LOOP_ESPERA_MAX_S` (**3 s**, teto bem abaixo do timeout de 15 s do hook).
+  3. Estourando a espera, o loop **segue mesmo assim** (fail-open — ADR-009),
+     mas a `entry` grava `fecho_do_turno: PARCIAL`, a confiança cai para
+     `baixa` e a evidência diz que aquilo não é o relatório. **Dado duvidoso
+     rotulado vale mais que dado duvidoso silencioso.**
+  4. Duas exceções ao "esperar": **subagente** (`isSidechain`) não conta como
+     conteúdo depois — senão todo turno com `Explore` gastaria o teto à toa; e
+     **`AskUserQuestion` fecha o turno por si** — o turno para na tool, à espera
+     do humano, e não há texto de fecho a aguardar.
+- **Alternativa descartada:** ler o `stop_hook_active` ou algum campo do payload
+  para saber se o turno fechou. Não existe tal campo — o único sinal disponível
+  é a forma do próprio transcript.
+- **Consequência declarada:** o hook passa a poder gastar até 3 s numa parada.
+  É o preço de arquivar o texto certo, e o loop já é assíncrono por natureza.
+
+---
+
 ## Pendências
 
 | # | Pendência | Estado |
@@ -259,3 +302,4 @@ ADR. Decisão nova entra aqui, com data e status, no mesmo commit da mudança.
 | P-04 | Rearme automático por cron ao reabrir a janela (F3). | aberta |
 | P-05 | Medir em operação: iterações por sessão, distribuição das condições de fim, trabalho por iteração. Só o uso real dá esses números. | aberta |
 | P-06 | Teste de item hostil plantado numa mensagem (T-06). | aberta |
+| P-07 | O teto de 3 s da espera pelo fecho (ADR-012) é **escolha, não medição**. Falta medir quanto o fecho realmente demora a chegar, e em que tamanho de sessão a espera estoura. | aberta |

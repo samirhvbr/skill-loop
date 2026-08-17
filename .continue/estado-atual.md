@@ -6,7 +6,7 @@
 
 ## Onde está
 
-**F0 e F1 entregues no mesmo dia.** O motor existe, roda e tem 72 testes com os
+**F0 e F1 entregues no mesmo dia.** O motor existe, roda e tem 83 testes com os
 controles verificados por mutação. **Nada rodou em trabalho real ainda** — não
 há um único número de operação.
 
@@ -19,7 +19,7 @@ escrito.
 ## O que roda hoje
 
 ```bash
-python3 -m unittest discover -s tests -v      # 72 testes, sem modelo, sem rede
+python3 -m unittest discover -s tests -v      # 83 testes, sem modelo, sem rede
 ./install.sh --dry-run                        # mostra o que faria
 python3 skill/loop/loop_ctl.py --raiz <repo> armar --objetivo "..." --itens 10
 ```

@@ -19,7 +19,9 @@ and hands the agent back the next item on the queue.
 >
 > Sibling of [AUDITOR](https://github.com/samirhvbr/AUDITOR) and
 > [skill-COMMITTER](https://github.com/samirhvbr/skill-COMMITTER).
-> Status: **engine delivered and tested (72 tests), no real-world operation yet.**
+> Status: **first real run done** (2026-08-16, 21/21 queue items closed in 68 min,
+> two stops) — and its audit found the product's central defect, now fixed (ADR-012).
+> 83 tests.
 
 ## The problem, measured
 
@@ -182,7 +184,7 @@ interrupted.
   PT-BR/EN lexicon reads as DOC and the loop continues without recording that the
   decision was yours. The fence is `ASSUMPTIONS.md` and `INDEX.md`, reviewed
   afterwards — not detector precision.
-- **No field numbers.** The engine has 72 tests; real operation is the next phase.
+- **No field numbers.** The engine has 83 tests; real operation is the next phase.
 - **The queue is written by a model** from your documentation. A bad queue means
   a bad loop, and the hook cannot detect that.
 - **`.loop/entries/` stores the agent's full message.** If it echoes a secret in

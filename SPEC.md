@@ -92,12 +92,30 @@ Independe do veredito ASK/DOC — é o que mantém o fio:
 ## 3. Leitura do transcript
 
 Pela **cauda**: últimos 2 MB, descartando a primeira linha da janela (partida).
-Varre de trás para frente e devolve a primeira entrada `type == "assistant"`
-**com `isSidechain` falso** que tenha bloco de texto.
+Varre de trás para frente até a primeira entrada `type == "assistant"`, com
+`isSidechain` falso, que tenha bloco de texto.
 
 O filtro de subagente é obrigatório: um `Explore` que termina em "devo procurar
 mais?" seria classificado como ASK do agente principal. Desligá-lo derruba 8
 testes.
+
+### 3.1 A corrida contra o fecho do turno (ADR-012)
+
+O hook dispara **antes** de o Claude Code gravar o último bloco de texto. Ler
+direto devolve resto velho — medido no EOP em 16/08: leitura às 00:19:22
+trouxe texto de 00:12:30, 154 entradas atrás.
+
+A leitura classifica o que achou como **fecho** ou **resto velho**: é fecho
+quando não há conteúdo do agente principal depois dele (`tool_use` do agente,
+`tool_result`). Sendo resto velho, **espera** — releitura a cada 100 ms até
+`LOOP_ESPERA_MAX_S` (default **3 s**; teto bem abaixo do timeout de 15 s).
+
+Não geram espera: entrada de **subagente** (`isSidechain`), que é outro turno; e
+**`AskUserQuestion`**, que fecha o turno por si — o agente perguntou e parou ali.
+
+Espera estourada → o loop **segue** (fail-open), e a `entry` grava
+`fecho_do_turno: PARCIAL`, confiança `baixa` e a evidência dizendo que aquilo
+não é o relatório.
 
 ---
 

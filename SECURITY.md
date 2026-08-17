@@ -98,6 +98,12 @@ Um handoff lido como DOC faz o loop seguir sem registrar que havia decisão sua.
       derruba 8 testes.
 - [x] Falso DOC é mitigado pela **colheita**: mesmo classificando errado, o item
       pendente entra na fila e não se perde.
+- [x] ✅ **Rótulo de fecho parcial** (ADR-012): quando o fecho do turno não
+      chegou ao transcript a tempo, a `entry` grava `fecho_do_turno: PARCIAL` e
+      a confiança cai para `baixa`. Nasceu de um defeito real, e silencioso: na
+      primeira rodada em produção as duas entries arquivaram fragmento de meio
+      de raciocínio como se fosse relatório. Mutação: desligar a espera derruba
+      as 2 regressões.
 - [ ] Desempate por modelo em caso de confiança `media` (v2). Hoje `media` segue
       o veredito léxico.
 

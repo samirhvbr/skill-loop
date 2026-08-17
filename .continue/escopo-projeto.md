@@ -26,7 +26,7 @@ anonimizada delas — verificado que as duas classificam idêntico.
   de fim (janela, dias, relógio, escopo).
 - ✅ `transcricao.py` — leitura pela cauda, filtro de subagente.
 - ✅ `loop_ctl.py` + `install.sh` (idempotente, `--dry-run`, `--uninstall`).
-- ✅ **72 testes**, verificados por mutação: desligar o léxico de handoff derruba
+- ✅ **83 testes**, verificados por mutação: desligar o léxico de handoff derruba
   6; a zona de fecho, 5; o filtro de subagente, 8; o kill-switch, 3.
 
 **Dois defeitos achados pelos próprios testes**, antes de qualquer uso: o

@@ -38,7 +38,7 @@ trabalho está em repouso.
 
 ---
 
-## ⚠️ Estado do projeto: F0 e F1 entregues, sem operação real
+## ⚠️ Estado do projeto: F1 entregue, primeira rodada real feita
 
 O que **existe e roda** (`0.1.0`, 16/08/2026):
 
@@ -48,15 +48,22 @@ O que **existe e roda** (`0.1.0`, 16/08/2026):
 - `skill/loop/lib/transcricao.py` — leitura pela cauda, filtro de subagente.
 - `skill/loop/loop_ctl.py` — armar/parar/retomar/status/fila.
 - `install.sh` — hook global idempotente, `--dry-run`, `--uninstall`.
-- **72 testes**, controles verificados por mutação.
+- **83 testes**, controles verificados por mutação.
 
 ```bash
-python3 -m unittest discover -s tests -v      # 72 testes, sem modelo, sem rede
+python3 -m unittest discover -s tests -v      # 83 testes, sem modelo, sem rede
 ./install.sh --dry-run                        # mostra o que faria
 ```
 
-O que **não existe**: qualquer número de operação real (F2), rearme automático
-por cron (F3), desempate por modelo (v2). `SPEC.md` marca com ⛔ o que falta.
+**Primeira rodada real (16/08, EOP):** 21/21 itens em 68 minutos, duas paradas,
+encerrada por fila zerada. A auditoria dela achou o defeito central — o hook
+lia o transcript antes de o fecho do turno chegar lá, e arquivava fragmento no
+lugar do relatório (ADR-012). **Uma rodada não é medição**: o que a F2 pede
+(distribuição das condições de fim, trabalho por iteração, taxa de erro de
+classificação) continua sem número.
+
+O que **não existe**: rearme automático por cron (F3), desempate por modelo
+(v2), scan de segredo na entry (P-02). `SPEC.md` marca com ⛔ o que falta.
 
 **Os dois fixtures em `tests/fixtures/` são mensagens reais do agente do Samir
 (16/08), anonimizadas** para o repositório público: nomes de classe, tabela,

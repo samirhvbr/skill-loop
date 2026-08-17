@@ -296,6 +296,7 @@ class Loop(object):
             "sessao: %s" % (meta.get("sessao") or "?"),
             "item_da_fila: %s" % json.dumps(meta.get("item") or "", ensure_ascii=False),
             "decisao: %s" % meta.get("decisao", "?"),
+            "fecho_do_turno: %s" % ("PARCIAL" if meta.get("parcial") else "completo"),
             "respondida: false" if res.kind == "ASK" else "respondida: n/a",
             "---",
             "",

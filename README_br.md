@@ -18,8 +18,10 @@ que fez), arquiva em `.loop/` e devolve o agente ao próximo item da fila.
 > Irmão do [AUDITOR](https://github.com/samirhvbr/AUDITOR) e do
 > [COMMITTER](https://github.com/samirhvbr/skill-COMMITTER) — mesmo padrão de
 > documentação e a mesma leitura de gatilho: fim de turno é o único instante em
-> que o estado do trabalho está em repouso. Status: **F1 entregue** (motor
-> testado), **sem operação em trabalho real**. Versão em inglês: [README.md](README.md).
+> que o estado do trabalho está em repouso. Status: **primeira rodada real feita**
+> (16/08 — 21/21 itens em 68 minutos, duas paradas), e a auditoria dela achou o
+> defeito central do produto, já corrigido (ADR-012).
+> Versão em inglês: [README.md](README.md).
 
 ## O problema, medido
 
@@ -193,7 +195,11 @@ Revisar `ASSUMPTIONS.md` não é opcional — é o preço de não ter sido inter
   (PT-BR/EN) passa como DOC e o loop continua sem registrar que era decisão sua.
   A cerca é o `ASSUMPTIONS.md` e o `INDEX.md`, revisados depois — não a
   precisão do detector.
-- **Nenhum número de campo.** O motor tem 59 testes; operação real é a F2.
+- **Um dia de campo, não um mês.** Uma rodada real (16/08): 2 paradas, 21 itens,
+  68 minutos. Ela sozinha já revelou um defeito silencioso — o hook lia o
+  transcript antes de o fecho do turno chegar lá, e arquivava fragmento no lugar
+  do relatório (ADR-012). Quantos outros defeitos as próximas rodadas escondem,
+  ninguém sabe: 83 testes não substituem operação.
 - **A fila é escrita por um modelo** a partir da documentação. Fila ruim = loop
   ruim, e isso não é detectável pelo hook.
 - **`.loop/entries/` guarda a mensagem inteira do agente.** Se ele ecoar segredo

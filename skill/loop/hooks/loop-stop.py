@@ -171,8 +171,15 @@ def principal():
         elif sid != st["session_id"]:
             sys.exit(0)  # outra sessão no mesmo repo não é dirigida por este loop
 
-    texto, tool = ultima_mensagem(payload.get("transcript_path") or "")
+    texto, tool, parcial = ultima_mensagem(payload.get("transcript_path") or "")
     res = classificar(texto, tool)
+    if parcial:
+        # O fecho do turno não chegou ao transcript a tempo. Seguimos, mas a
+        # classificação vale menos e a entry precisa dizer isso (ADR-012).
+        res.confianca = "baixa"
+        res.evidencias.insert(0, "⚠️ texto PARCIAL — o fecho do turno não estava "
+                                 "no transcript quando o hook leu; isto é resto "
+                                 "de meio de raciocínio, não o relatório")
 
     n = st.get("iteracao", 0) + 1
     st["iteracao"] = n
@@ -229,6 +236,7 @@ def principal():
         "titulo": (item or res.sinal),
         "colhidos": colhidos,
         "decisao": decisao,
+        "parcial": parcial,
     })
     loop.indexar(n, res, caminho, decisao, item)
     if res.kind == "ASK" and not motivo:
