@@ -114,6 +114,21 @@ armado:
   próxima ação for destrutiva/irreversível sem premissa que a cubra, ou se você
   estiver bloqueado por algo fora do seu alcance (credencial, serviço fora do ar).
 
+## Acompanhar enquanto roda
+
+De outro terminal, sem atrapalhar a sessão:
+
+```bash
+loop-watch              # atualiza a cada 30 s
+loop-watch -n 10        # outro intervalo
+loop-watch --ate-encerrar   # sai (com sino) quando o loop parar
+loop-watch --uma-vez        # uma leitura e sai, para log ou cron
+```
+
+Ele mostra o que o `status` cru não mostra: **delta desde a última leitura**
+(andou?) e **tempo restante de cada condição de fim**, com a que bate primeiro
+marcada. ASK e fecho parcial aparecem sinalizados na lista de paradas.
+
 ## Ler o que ficou registrado
 
 Depois — nunca durante:

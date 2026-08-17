@@ -174,6 +174,38 @@ e sem ele a continuação vira "continue de onde parou" — o agente re-planeja 
 cada turno e o trabalho deriva. A skill lê a documentação e destila a fila antes
 de armar; é o passo que decide se o loop funciona.
 
+## Acompanhar de longe
+
+```bash
+loop-watch                    # a cada 30 s
+loop-watch --ate-encerrar     # sai com sino quando o loop parar
+loop-watch --uma-vez >> registro.log
+```
+
+```
+╭─ loop-work · EOP ─ 21:35:11
+  RODANDO   iteração 7/40
+
+  Fila   ███████████░░░░░░░░░░░  2/4  (50%)
+  Agora  → item 3 — o próximo da fila
+
+  Fim por
+    janela 05:00-22:00             fecha em 25min  ← primeira
+    relógio 6h00                   resta 6h00
+    fila zerada                    2 pendente(s)
+    sem progresso 1/3 · kill-switch ausente
+
+  Últimas paradas
+    #7     DOC  relato    continuou   21:43  ⚠ fecho parcial
+    #6     ASK  handoff   continuou   21:31  ⚠ premissa registrada
+
+  Desde a última leitura: +2 parada(s), +1 item(ns) fechado(s)
+╰
+```
+
+O `watch -n 30 status` repinta a mesma tela; isto responde **andou?** e
+**quanto falta?** — as duas perguntas de quem não está olhando.
+
 ## O que fica registrado
 
 ```
@@ -199,7 +231,7 @@ Revisar `ASSUMPTIONS.md` não é opcional — é o preço de não ter sido inter
   68 minutos. Ela sozinha já revelou um defeito silencioso — o hook lia o
   transcript antes de o fecho do turno chegar lá, e arquivava fragmento no lugar
   do relatório (ADR-012). Quantos outros defeitos as próximas rodadas escondem,
-  ninguém sabe: 83 testes não substituem operação.
+  ninguém sabe: 101 testes não substituem operação.
 - **A fila é escrita por um modelo** a partir da documentação. Fila ruim = loop
   ruim, e isso não é detectável pelo hook.
 - **`.loop/entries/` guarda a mensagem inteira do agente.** Se ele ecoar segredo

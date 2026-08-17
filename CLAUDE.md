@@ -47,12 +47,14 @@ O que **existe e roda** (`0.1.0`, 16/08/2026):
 - `skill/loop/lib/estado.py` — `.loop/` inteiro + condições de fim.
 - `skill/loop/lib/transcricao.py` — leitura pela cauda, filtro de subagente.
 - `skill/loop/loop_ctl.py` — armar/parar/retomar/status/fila.
+- `skill/loop/loop_watch.py` — acompanhamento de longe (delta + tempo restante).
 - `install.sh` — hook global idempotente, `--dry-run`, `--uninstall`.
-- **83 testes**, controles verificados por mutação.
+- **101 testes**, controles verificados por mutação.
 
 ```bash
-python3 -m unittest discover -s tests -v      # 83 testes, sem modelo, sem rede
+python3 -m unittest discover -s tests -v      # 101 testes, sem modelo, sem rede
 ./install.sh --dry-run                        # mostra o que faria
+loop-watch --uma-vez --raiz <repo>            # uma leitura do acompanhamento
 ```
 
 **Primeira rodada real (16/08, EOP):** 21/21 itens em 68 minutos, duas paradas,

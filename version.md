@@ -1,6 +1,6 @@
 # Versão — skill-LOOP
 
-**Versão atual:** `0.2.0`
+**Versão atual:** `0.2.1`
 
 > Este arquivo é a **fonte da verdade** da versão do projeto. Qualquer lugar que
 > precise exibir ou reportar a versão extrai o **primeiro número semver (`X.Y.Z`)**
@@ -60,6 +60,31 @@ da mesma entrega repetem a versão.
 ---
 
 ## 3. Changelog
+
+### `0.2.1` — 2026-08-16 — `loop-watch`: acompanhar de longe
+
+`watch -n 30 loop_ctl.py status` re-renderiza a mesma tela e **não responde as
+duas perguntas de quem está longe do monitor**: *andou?* e *quanto falta?*.
+
+`skill/loop/loop_watch.py` responde as duas:
+
+- **delta entre leituras** — `+3 parada(s), +2 item(ns) fechado(s)`, ou
+  "sem mudança"; é a única coisa que uma tela repintada não dá;
+- **tempo restante de cada condição de fim**, com a que vai bater primeiro
+  marcada (`← primeira`). Para isso nasceu `minutos_ate_fechar` no motor, que
+  cruza a meia-noite e devolve `None` para janela inválida — nunca inventa
+  número;
+- barra de progresso da fila, próximo item, e as últimas paradas com
+  **ASK sinalizada** (premissa foi registrada) e **fecho parcial sinalizado**
+  (o defeito do ADR-012, visível de longe se voltar);
+- `--uma-vez` (cron/log), `--ate-encerrar` (sai com sino quando o loop para),
+  `--raiz`, `--sem-cor`. Sem cor automaticamente quando a saída não é terminal.
+
+O `install.sh` passa a criar os atalhos **`loop-watch`** e **`loop-ctl`** em
+`~/.local/bin` (shim, não symlink — deixa explícito qual repositório serve), e
+avisa se o diretório não está no PATH. `--uninstall` remove os dois.
+
+**18 testes novos** (`tests/test_watch.py`), total **101**.
 
 ### `0.2.0` — 2026-08-16 — primeira rodada real, e o defeito que ela revelou
 

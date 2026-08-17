@@ -117,6 +117,26 @@ def fora_da_janela(janela, dias=None, momento=None):
     return not dentro
 
 
+def minutos_ate_fechar(janela, dias=None, momento=None):
+    """Minutos até a janela de produção fechar.
+
+    `None` = não há janela · `0` = já está fechada. É o número que importa a
+    quem está longe do monitor: não "qual é a janela", e sim "quanto ainda
+    tenho". Cruza a meia-noite pelo mesmo caminho de `fora_da_janela`.
+    """
+    if not janela:
+        return None
+    agora_dt = momento or datetime.now()
+    if fora_da_janela(janela, dias, agora_dt):
+        return 0
+    try:
+        inicio, fim = [_hhmm(x) for x in str(janela).split("-", 1)]
+    except (ValueError, AttributeError):
+        return None
+    minuto = agora_dt.hour * 60 + agora_dt.minute
+    return (fim - minuto) if minuto < fim else (24 * 60 - minuto + fim)
+
+
 def minutos_desde(iso):
     if not iso:
         return 0.0

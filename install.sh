@@ -15,6 +15,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOOK="$REPO/skill/loop/hooks/loop-stop.py"
 SETTINGS="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
 SKILLS="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"
+BIN="${LOOP_BIN_DIR:-$HOME/.local/bin}"
 MODO="${1:-install}"
 
 command -v python3 >/dev/null || { echo "erro: python3 não encontrado" >&2; exit 1; }
@@ -81,18 +82,40 @@ PY
 
 if [[ "$MODO" == "--dry-run" ]]; then
   echo "[dry-run] skill seria ligada em $SKILLS/loop-work -> $REPO/skill/loop"
+  echo "[dry-run] comandos loop-watch e loop-ctl seriam criados em $BIN"
   exit 0
 fi
 
 if [[ "$MODO" == "--uninstall" ]]; then
-  rm -f "$SKILLS/loop-work"
-  echo "skill /loop-work removida (nenhum .loop/ foi tocado)"
+  rm -f "$SKILLS/loop-work" "$BIN/loop-watch" "$BIN/loop-ctl"
+  echo "skill /loop-work e comandos removidos (nenhum .loop/ foi tocado)"
   exit 0
 fi
 
 mkdir -p "$SKILLS"
 ln -sfn "$REPO/skill/loop" "$SKILLS/loop-work"
 echo "skill /loop-work ligada em $SKILLS/loop-work"
+
+# Atalhos de terminal. Shim, não symlink: o script resolve `lib/` a partir do
+# próprio caminho, e um symlink em ~/.local/bin apontaria para lá com o
+# realpath certo — mas o shim deixa explícito qual repositório está servindo,
+# o que importa quando existem cópias.
+mkdir -p "$BIN"
+for cmd in watch ctl; do
+  cat > "$BIN/loop-$cmd" <<SHIM
+#!/usr/bin/env bash
+# Gerado por skill-LOOP/install.sh — aponta para $REPO
+exec python3 "$REPO/skill/loop/loop_$cmd.py" "\$@"
+SHIM
+  chmod +x "$BIN/loop-$cmd"
+done
+echo "comandos: loop-watch · loop-ctl  (em $BIN)"
+case ":$PATH:" in
+  *":$BIN:"*) ;;
+  *) echo "  ⚠️  $BIN não está no PATH — use o caminho completo ou ajuste o PATH" ;;
+esac
+
 echo
 echo "Pronto. O hook está inerte em todo repositório sem .loop/."
 echo "Para começar, no repositório alvo:  /loop-work <objetivo>"
+echo "Para acompanhar de outro terminal:  loop-watch"

@@ -4,7 +4,7 @@
 e estado em [`.continue/`](../.continue/); contrato normativo em
 [`SPEC.md`](../SPEC.md); prompt do produto em [`prompts/`](../prompts/).
 
-> Projeto em **F1**: motor entregue e testado (83 testes), **sem operação em
+> Projeto em **F1**: motor entregue e testado (101 testes), **sem operação em
 > trabalho real**. O que estiver marcado com ⛔ no `SPEC.md` é lacuna conhecida,
 > não esquecimento.
 
@@ -23,6 +23,7 @@ e estado em [`.continue/`](../.continue/); contrato normativo em
 | [../SPEC.md](../SPEC.md) | **Normativo.** Gatilho, classificação, transcript, `reason`, condições de fim, formato do `.loop/`. |
 | [../SECURITY.md](../SECURITY.md) | Modelo de ameaça (T-01 a T-07). **Leitura obrigatória.** |
 | [../skill/loop/SKILL.md](../skill/loop/SKILL.md) | A skill: como destilar a fila, armar, e o que o agente deve fazer durante o loop. |
+| `../skill/loop/loop_watch.py` | Acompanhamento de longe: delta entre leituras e tempo restante de cada condição de fim. |
 | [../prompts/continuacao.md](../prompts/continuacao.md) | O `reason` de continuação — artefato do produto. |
 | [../version.md](../version.md) | Fonte de verdade da versão, gatilhos de bump, formato de commit, changelog. |
 | [../CLAUDE.md](../CLAUDE.md) / [../AGENTS.md](../AGENTS.md) | Regras de quem desenvolve este repo. Espelhados — editar os dois. |

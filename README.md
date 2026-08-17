@@ -21,7 +21,7 @@ and hands the agent back the next item on the queue.
 > [skill-COMMITTER](https://github.com/samirhvbr/skill-COMMITTER).
 > Status: **first real run done** (2026-08-16, 21/21 queue items closed in 68 min,
 > two stops) — and its audit found the product's central defect, now fixed (ADR-012).
-> 83 tests.
+> 101 tests.
 
 ## The problem, measured
 
@@ -162,6 +162,19 @@ from where you left off" — the agent re-plans every turn and drifts. The skill
 reads the documentation and distils the queue **before** arming; that step
 decides whether the loop works at all.
 
+## Watching it from a distance
+
+```bash
+loop-watch                    # refresh every 30s
+loop-watch --ate-encerrar     # exit (with a bell) when the loop stops
+loop-watch --uma-vez >> run.log
+```
+
+`watch -n 30 status` repaints the same screen; this answers the two questions
+you actually have when you are not looking: **did it move?** (delta since the
+last read) and **how much is left?** (time remaining on every end condition,
+with the one about to trigger marked). ASK stops and partial closes are flagged.
+
 ## What gets recorded
 
 ```
@@ -184,7 +197,7 @@ interrupted.
   PT-BR/EN lexicon reads as DOC and the loop continues without recording that the
   decision was yours. The fence is `ASSUMPTIONS.md` and `INDEX.md`, reviewed
   afterwards — not detector precision.
-- **No field numbers.** The engine has 83 tests; real operation is the next phase.
+- **No field numbers.** The engine has 101 tests; real operation is the next phase.
 - **The queue is written by a model** from your documentation. A bad queue means
   a bad loop, and the hook cannot detect that.
 - **`.loop/entries/` stores the agent's full message.** If it echoes a secret in
