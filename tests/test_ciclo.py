@@ -319,6 +319,46 @@ class TestGuardaCorpos(Base):
         self.assertTrue(os.path.exists(self.loop.p("STATUS.md")))
         self.assertEqual(self.loop.ler()["fase"], "encerrando")
 
+    def test_o_aviso_de_fim_e_ato_UNICO_por_rodada(self):
+        """Em 17/08 a mesma rodada anunciou o próprio fim TRÊS vezes.
+
+        As guardas de fase dependem de uma sequência de paradas acontecer. Se a
+        sessão morre no meio, ou se a fila zera de novo depois de ganhar itens,
+        a condição de fim é recalculada e o aviso sai outra vez — e a terceira
+        caiu no meio de trabalho que não era do loop, com autoridade aparente
+        de instrução do sistema.
+
+        `notificado` é o único estado que não depende de sequência.
+        """
+        self.armar()
+        self.zerar_a_fila()
+        _, primeiro = self.rodar(DOC)
+        self._encerrou(primeiro, "fila zerada")
+        self.assertTrue(self.loop.ler()["notificado"],
+                        "emitir o aviso tem de marcar a rodada como notificada")
+
+        # o estado é forçado de volta ao que era ANTES da parada seguinte
+        # consumir a fase — é exatamente o que uma sessão morta deixa para trás
+        st = self.loop.ler()
+        st["ativo"] = True
+        st["fase"] = "encerrando"
+        self.loop.gravar(st)
+
+        _, segundo = self.rodar(DOC)
+        self.assertIsNone(segundo,
+                          "o segundo aviso não pode existir: o fim é ato único")
+
+    def test_rodada_nova_tem_direito_ao_proprio_aviso(self):
+        """O aperto não pode emudecer a rodada seguinte."""
+        self.armar()
+        st = self.loop.ler()
+        st["notificado"] = True
+        self.loop.gravar(st)
+
+        self.armar()
+        self.assertFalse(self.loop.ler()["notificado"],
+                         "`armar` limpa a marca — rodada nova, aviso novo")
+
     def test_kill_switch_encerra(self):
         self.armar()
         open(self.loop.p("STOP"), "w").close()

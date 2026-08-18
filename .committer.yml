@@ -1,5 +1,22 @@
 # Opt-in do COMMITTER neste repositório (ADR-004 de lá).
 # A presença deste arquivo é o opt-in; as chaves só RESTRINGEM (SPEC.md do COMMITTER §2).
 enabled: true
-push: true
+# ── Ajustado em 18/08/2026, autorizado pelo Samir por escrito ──────────────
+#
+# push: false — a alavanca contra PUBLICACAO nao revisada.
+#   Motivo: no BLUE3-INTRANET o ciclo autorou e pushou o commit 1.3.92 (83b99caf,
+#   16/08 18:55) sem revisao, e aquele commit introduziu o defeito do valor liquido
+#   do contrato. Nos 7 dias ate 18/08 foram 17 commits automaticos em 11 repos e
+#   17 pushes: taxa de publicacao 100%. Commitar local segue valendo.
+#
+# quiet_window_min: 120 — a alavanca contra EMPACOTAR TRABALHO EM CURSO.
+#   O default de 5 min mede inatividade recente, nao revisao: trabalho parado 6
+#   minutos e indistinguivel de trabalho aprovado. 120 min NAO impede o commit,
+#   so atrasa — a janela governa QUANDO, nunca SE. Por isso as duas chaves juntas,
+#   nao uma no lugar da outra.
+#
+# CUSTO ACEITO: perde-se o push automatico como backup fora da maquina. Nesta
+#   topologia o push e o unico caminho do trabalho para fora da estacao.
+push: false
+quiet_window_min: 120
 branch_only: master

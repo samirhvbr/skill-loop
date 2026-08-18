@@ -197,10 +197,27 @@ def principal():
     if not st or not st.get("ativo"):
         sys.exit(0)
 
+
     # A parada seguinte ao aviso de encerramento é o fim de verdade.
     if st.get("fase") == "encerrando":
         st["ativo"] = False
         loop.gravar(st)
+        sys.exit(0)
+
+    # JÁ AVISOU: cala para sempre, aconteça o que acontecer com a fila.
+    #
+    # O aviso de encerramento é ATO ÚNICO por rodada, e esta linha é o que
+    # garante isso. As guardas abaixo (`fase == "encerrando"` → morre na
+    # parada seguinte) dependem de uma sequência de paradas acontecer; se a
+    # sessão morre no meio, ou se a fila zera de novo depois de ganhar itens,
+    # a condição de fim é recalculada e o aviso sai OUTRA VEZ. Foi o que
+    # aconteceu em 17/08: a mesma rodada anunciou o próprio fim três vezes, e
+    # a terceira caiu no meio de trabalho que não era do loop.
+    #
+    # `notificado` é o único estado que não depende de sequência: uma vez
+    # verdadeiro, só o `armar`/`retomar` o limpa — porque aí é rodada nova, e
+    # rodada nova tem direito ao próprio aviso.
+    if st.get("notificado"):
         sys.exit(0)
 
     sid = payload.get("session_id")
@@ -296,6 +313,7 @@ def principal():
                           and st.get("pendentes_ao_armar") == 0)
         if st.get("notificar") and not nada_aconteceu:
             st["fase"] = "encerrando"
+            st["notificado"] = True
             loop.gravar(st)
             # RELATÓRIO, não ordem — e a diferença custou duas rodadas.
             #

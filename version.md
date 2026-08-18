@@ -1,6 +1,6 @@
 # Versão — skill-LOOP
 
-**Versão atual:** `0.3.0`
+**Versão atual:** `0.3.1`
 
 > Este arquivo é a **fonte da verdade** da versão do projeto. Qualquer lugar que
 > precise exibir ou reportar a versão extrai o **primeiro número semver (`X.Y.Z`)**
@@ -61,7 +61,7 @@ da mesma entrega repetem a versão.
 
 ## 3. Changelog
 
-### `0.3.0` — 2026-08-17 — a fila mandava na rodada por tempo, e não era dela a missão
+### `0.3.1` — 2026-08-17 — a fila mandava na rodada por tempo, e não era dela a missão
 
 O dono digitou `loop-ctl armar --raiz ~/x/EOP --duracao 6h` sobre uma fila 66/66 e
 tomou `erro: nenhum item - [ ] na fila`. A pergunta que veio junto é a mais curta

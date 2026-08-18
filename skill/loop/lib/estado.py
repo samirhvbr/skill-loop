@@ -59,6 +59,10 @@ PADRAO = {
     "ultima_impressao": None,
     "colher_itens": True,
     "notificar": True,
+    #: Já anunciou o fim desta rodada? Ato ÚNICO — ver a guarda no
+    #: `loop-stop.py`. Limpo só pelo `iniciar`, porque rodada nova tem direito
+    #: ao próprio aviso.
+    "notificado": False,
     "encerrado_por": None,
     "encerrado_detalhe": None,   # "22 item(ns) concluído(s)" — o que o motivo omite
     "encerrado_em": None,
@@ -327,6 +331,7 @@ class Loop(object):
         st.update(kw)
         st["ativo"] = True
         st["fase"] = "rodando"
+        st["notificado"] = False
         st["armado_em"] = agora()
         os.makedirs(self.entries, exist_ok=True)
         # Denominador do escopo: quantos itens já estavam feitos quando armou.
