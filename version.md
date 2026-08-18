@@ -1,46 +1,16 @@
 # Versão — skill-LOOP
 
-**Versão atual:** `0.3.1`
+### `0.3.3` — 2026-08-18 — o changelog volta a bater com o log
 
-> Este arquivo é a **fonte da verdade** da versão do projeto. Qualquer lugar que
-> precise exibir ou reportar a versão extrai o **primeiro número semver (`X.Y.Z`)**
-> encontrado aqui. Mantenha a linha **"Versão atual"** sempre como a primeira
-> ocorrência de um número de versão. Mesma mecânica dos projetos-irmãos
-> (AUDITOR, COMMITTER).
+O bump da 0.3.1 foi feito com `sed` sem âncora e renomeou a entrada histórica
+da 0.3.0 além do cabeçalho; o `1d36e61` restaurou o título mas prometeu na
+mensagem uma entrada que não escreveu. Estas são as duas que faltavam.
 
----
+### `0.3.1` — 2026-08-18 — o aviso de encerramento vira ato único
 
-## 1. Convenção de Versionamento (`X.Y.Z`)
-
-| Componente | Significado | Como sobe |
-|---|---|---|
-| **X** | Release estável — loop operando em trabalho real da casa | Manual |
-| **Y** | Mudança estrutural — fase concluída, mudança de contrato (`STATE.json`, formato do `.loop/`), ADR aceito que muda a direção | Manual |
-| **Z** | Incremento a cada entrega | A cada entrega |
-
-Enquanto `X` for `0`, contratos podem quebrar entre versões `0.Y`.
-
-### Gatilhos de bump do `Z`
-
-- Alterar o **léxico do classificador** ou qualquer regra de ASK × DOC.
-- Alterar o **prompt de continuação** (`prompts/continuacao.md`) — é o produto.
-- Alterar guarda-corpos: teto de iterações, sem-progresso, kill-switch, fila.
-- Alterar o esquema do `STATE.json` ou o formato de `.loop/`.
-- Alterar `install.sh` ou `.claude/settings.json`.
-- Criar ou alterar documento em `docs/`, `SPEC.md` ou `prompts/` que **muda uma
-  regra** (não vale corrigir redação).
-- Adicionar ou alterar testes que definem comportamento esperado.
-
-### Gatilhos de bump do `Y`
-
-- Fase concluída (ver `.continue/escopo-projeto.md`).
-- Quebra de compatibilidade no `.loop/` já existente em algum repo.
-- ADR novo com status **Aceito** que muda a direção.
-
-> Correções de texto, typo e formatação **não** exigem bump.
-
----
-
+O hook reemitia o aviso de fecho em todo stop, sobre um loop já encerrado —
+quatro vezes numa rodada, e uma delas dentro de uma sessão que não era do
+loop. Agora o `STATE.json` marca `notificado` e o aviso sai uma vez só.
 ## 2. Formato de Commit Obrigatório
 
 ```
