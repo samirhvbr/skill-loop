@@ -720,7 +720,17 @@ class TestArmarSemFila(Base):
     """Armar com zero pendentes é rodada provadamente morta (#20/#21/#22 do EOP)."""
 
     def ctl(self, *args):
-        proc = subprocess.run([sys.executable, CTL] + list(args),
+        # A escolha de sessão entrou como guarda de porta no `0.2.6`, e um
+        # `armar` sem nenhuma das três flags passa a ser recusado antes de
+        # chegar onde estes testes olham. Estes aqui são sobre a FILA: pedir a
+        # adoção de propósito mantém cada um medindo o que foi escrito para
+        # medir. A guarda de sessão tem os testes dela em `test_ciclo.py`.
+        args = list(args)
+        if args and args[0] == "armar" and not any(
+                a in args for a in ("--sessao", "--qualquer-sessao",
+                                    "--adotar-primeira-parada")):
+            args.append("--adotar-primeira-parada")
+        proc = subprocess.run([sys.executable, CTL] + args,
                               capture_output=True, text=True, timeout=30,
                               env=dict(os.environ, CLAUDE_SETTINGS=self.settings))
         return proc.returncode, proc.stdout + proc.stderr

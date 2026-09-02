@@ -21,6 +21,7 @@ import unittest
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HOOK = os.path.join(RAIZ, "skill", "loop", "hooks", "loop-stop.py")
+CTL = os.path.join(RAIZ, "skill", "loop", "loop_ctl.py")
 sys.path.insert(0, os.path.join(RAIZ, "skill", "loop", "lib"))
 
 from estado import Loop   # noqa: E402
@@ -765,3 +766,73 @@ class TestFailOpen(Base):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+# ── a porta: a adoção de sessão é escolhida, nunca herdada ──────────────────
+class TestArmarNaoAdotaSessaoPorOmissao(Base):
+    """A guarda de 02/09, e ela mora na PORTA porque o hook já é tarde.
+
+    `bind_session: true` com `session_id: null` amarra à PRIMEIRA sessão que
+    para no repositório — qualquer chat já aberto ali serve. Numa rodada real do
+    EOP isso adotou a sessão que o dono havia aberto para outra coisa, e o custo
+    foi 18 entradas de diário no item errado, 4 itens espúrios colhidos de
+    fragmentos daquelas mensagens e duas sessões dirigindo a mesma árvore.
+
+    A guarda **não proíbe** — quem arma de um shell não sabe o próprio
+    `session_id`, e recusar sem saída viraria `--force` na semana seguinte. Ela
+    exige que a adoção seja **dita**.
+    """
+
+    def ctl(self, *args):
+        proc = subprocess.run([sys.executable, CTL] + list(args),
+                              capture_output=True, text=True, timeout=30)
+        return proc.returncode, proc.stdout + proc.stderr
+
+    def armar_pelo_cli(self, *extra):
+        return self.ctl("armar", "--raiz", self.tmp,
+                        "--objetivo", "fechar a fase 3", *extra)
+
+    def test_sem_flag_nenhuma_recusa_e_nomeia_as_TRES_saidas(self):
+        rc, saida = self.armar_pelo_cli()
+        self.assertEqual(rc, 2, saida)
+        for saida_esperada in ("--sessao", "--adotar-primeira-parada",
+                               "--qualquer-sessao"):
+            self.assertIn(saida_esperada, saida,
+                          "recusar sem nomear as saídas é guarda que atrapalha")
+
+    def test_a_recusa_NAO_deixa_loop_meio_armado(self):
+        # Metade do defeito que ela previne é estado gravado antes da escolha:
+        # um `.loop/` armado com adoção pendente não passa a obedecer a guarda
+        # depois (foi a lição do `¨¨` do EOP, no `0.2.3`).
+        self.armar_pelo_cli()
+        st = self.loop.ler()
+        # `None` é o desfecho mais forte: não gravou NADA. Aceitar também
+        # "gravou e não ativou" seria absolver um meio-armar que o `retomar`
+        # depois reativaria sem passar pela escolha.
+        self.assertIsNone(st, "o armar recusou e ainda assim gravou estado")
+
+    def test_com_sessao_explicita_arma_e_grava_o_id(self):
+        rc, saida = self.armar_pelo_cli("--sessao", "sessao-123")
+        self.assertEqual(rc, 0, saida)
+        st = self.loop.ler()
+        self.assertTrue(st["ativo"])
+        self.assertEqual(st["session_id"], "sessao-123")
+        self.assertTrue(st["bind_session"])
+
+    def test_adotar_primeira_parada_arma_com_o_comportamento_ANTIGO(self):
+        # o padrão histórico continua alcançável — o que mudou é ele ser dito
+        rc, saida = self.armar_pelo_cli("--adotar-primeira-parada")
+        self.assertEqual(rc, 0, saida)
+        st = self.loop.ler()
+        self.assertTrue(st["bind_session"])
+        self.assertIsNone(st["session_id"])
+        self.assertIn("ADOÇÃO PEDIDA", saida,
+                      "o resumo tem de dizer que a adoção foi escolhida, senão "
+                      "a linha `a primeira que parar` volta a parecer default")
+
+    def test_qualquer_sessao_arma_sem_amarrar(self):
+        rc, saida = self.armar_pelo_cli("--qualquer-sessao")
+        self.assertEqual(rc, 0, saida)
+        st = self.loop.ler()
+        self.assertFalse(st["bind_session"])
+        self.assertIn("não amarra", saida)

@@ -136,6 +136,92 @@ painel, 2.
 o conduzido pelo item na cauda — dois prompts com as mesmas cláusulas e contextos
 diferentes. Junta-se à P-05.
 
+> ⚠️ **Colisão de numeração — as duas `0.2.5` abaixo são entregas
+> diferentes.** Em 18/08 esta árvore seguiu para `0.3.x` sem ter recebido o
+> que a `origin/master` publicou em 02/09, e as duas linhas alocaram `0.2.5`
+> sem saber uma da outra. Nada foi renumerado de propósito: cada número está
+> preso à mensagem de um commit publicado, e mudá-lo aqui quebraria o
+> casamento entre o changelog e o log — que é o defeito que a `0.3.3` acabou
+> de consertar. A reconciliação foi por **merge** em 02/09; a linha segue em
+> `0.3.4`. Ordem abaixo: por versão, com as duas `0.2.5` lado a lado.
+
+### `0.2.6` — 2026-09-02 — a adoção de sessão deixa de ser herdada por omissão
+
+**A primeira das três saídas da P-09, e a única que cabia com a rodada viva.** O
+`0.2.5` registrou o defeito e não o consertou, pela norma que o `0.2.4` já havia
+escrito: mexer em `hooks/` ou `lib/` com rodada em curso faz o hook sair
+fail-open e travar a rodada no meio. **Medido agora, e é o que destravou:** o
+`hooks/loop-stop.py` importa `classificador`, `diagnostico`, `estado` e
+`transcricao` — todos de `lib/` — e **não importa `loop_ctl.py`**. O `armar`,
+portanto, está fora do caminho do hook, exatamente como o `loop_watch.py` estava
+no `0.2.4`. As outras duas saídas (marcador do processo, lock de árvore) moram no
+hook e em `lib/`, e continuam esperando rodada morta.
+
+**O que muda:** `armar` recusa-se a armar com `bind_session: true` e sem
+`--sessao`, e nomeia as três saídas — `--sessao <id>`,
+`--adotar-primeira-parada` (novo) e `--qualquer-sessao`.
+
+⛔ **Não é a "falha ruidosa" pura que a P-09 propunha, e a diferença foi
+medida:** o `loop.sh` do EOP arma com `loop-ctl armar --raiz ~/x/EOP --duracao
+10h`, **sem `--sessao`** — uma recusa seca quebraria o script do dono, e guarda
+que atrapalha vira `--force` na semana seguinte. Também não se pode exigir o id:
+o ADR-008 já descartou isso porque **ninguém sabe o próprio de cor**. Então o
+comportamento histórico continua alcançável em uma palavra; o que ele deixa de
+ser é **herdado por omissão** — o único jeito em que custou caro.
+
+**A guarda recusa SEM GRAVAR ESTADO**, e isso é o segundo controle, não detalhe:
+`.loop/` meio-armado é o defeito que o `0.2.3` pagou com o `¨¨` — estado gravado
+antes de uma guarda não passa a obedecê-la depois, e um `retomar` o reativaria
+sem passar pela escolha. O teste afirma `ler() is None`, que é o desfecho mais
+forte disponível.
+
+O resumo do `armar` passa a dizer **como** a sessão foi escolhida
+(`a primeira que parar — ADOÇÃO PEDIDA` · `qualquer (não amarra)`): a linha
+antiga era verdadeira e ambígua, e foi lida como default por uma rodada inteira.
+
+**Testes: 188 → 193.** ADR-008 ganha emenda; a P-09 registra a saída entregue e
+as duas que restam.
+
+| Controle desligado | Testes que caem |
+|---|---|
+| a guarda de porta sai (adoção volta a ser o default silencioso) | 2 |
+| o resumo volta a não dizer COMO a sessão foi escolhida | 2 |
+
+### `0.2.5` — 2026-09-02 — o auto-bind adotou a sessão errada, e o ADR dizia "necessariamente"
+
+**O produto se auditou rodando pela segunda vez, e o achado é no texto de uma
+decisão, não no código.** Só `docs/` mudou: nenhuma linha de `hooks/` ou `lib/`,
+de propósito — a rodada do EOP estava viva, com **outra** sessão executando o
+`L219`, e é a mesma razão que no `0.2.4` adiou o conserto do `INDEX.md`.
+
+O **ADR-008** afirma que a primeira parada *"é **necessariamente** a da sessão
+que armou"*, e o comentário em `hooks/loop-stop.py:167` repete. **Não é.** É a
+primeira sessão que **termina um turno** no repositório — qualquer chat já aberto
+ali serve. No EOP o loop adotou uma sessão que o dono havia aberto para triar os
+PRs do Dependabot, enquanto o `loop.sh` armava de outra. O `print` do próprio
+`armar` já dizia a verdade (`sessão: a primeira que parar`): o defeito é de
+documentação, e documentação que promete garantia inexistente é pior que silêncio.
+
+**Custo medido na rodada** (é o que torna isto pendência e não curiosidade):
+
+- **18 entradas** de diário (`0153`–`0160`, `0166`–`0172`) que são mensagens sobre
+  PRs e sobre um artifact, arquivadas sob `L191`, `L201`, `L219` e `L220`;
+- **4 itens espúrios** na fila, colhidos de fragmentos truncados da mensagem
+  (`- [ ] a página como fonte`) — **terceira** reincidência da família que a
+  emenda do ADR-005 e o marcador nu do `0.2.4` já visitaram;
+- **duas sessões dirigidas contra a mesma árvore**, o mais caro: duas colisões de
+  `version.md` no EOP (`1.76.71` e `1.76.72`, a segunda no commit que consertava a
+  primeira), duas `master` vermelhas na guarda `G2` do repo alvo, e dois commits
+  que anunciaram trabalho que o diff não continha.
+
+**Entregue:** a **P-09** com o contraexemplo, o custo e três saídas a avaliar
+(recusar `armar` sem `--sessao` quando `bind_session: true`; marcador do processo
+que armou, conferido pelo hook e retrocompatível quando ausente; lock de árvore
+que faça a segunda sessão RECUSAR item em vez de competir). E o ADR-008 ganha a
+ressalva onde a afirmação vive — a decisão continua de pé, o que cai é a garantia.
+
+**Testes: 188, sem mudança** — nada de comportamento mudou, e isso é o ponto.
+
 ### `0.2.5` — 2026-08-17 — a rodada que nasce morta, e o reabastecimento promovido
 
 A rodada de 22 paradas do EOP encerrou por `fila zerada` às 16:30 — **corretamente,
