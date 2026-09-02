@@ -146,6 +146,12 @@ lugar do sistema de arquivos).
 Depois de armar, **comece a trabalhar imediatamente**, no mesmo turno. Não
 encerre para pedir confirmação: a primeira parada é o que amarra o loop à sessão.
 
+`armar` deixa em `.loop/loop.sh` o atalho da **próxima** rodada neste repo —
+`./.loop/loop.sh` arma por 6h e abre o painel, `./.loop/loop.sh 10h` por outro
+tempo. Ele é do dono a partir daí: nunca é sobrescrito, e é lá que ele guarda
+`--objetivo`/`--janela`/`--itens` entre rodadas. Mencione o arquivo ao confirmar,
+uma linha — quem arma pelo terminal não vai voltar aqui para lembrar da flag.
+
 ## Durante o loop
 
 A cada fim de turno o hook injeta o próximo item e as regras. Enquanto ele estiver

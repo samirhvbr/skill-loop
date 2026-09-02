@@ -1,13 +1,32 @@
 # Estado atual — skill-LOOP
 
-> Atualizado em **2026-08-17**, versão `0.2.3`. Onde o projeto está e o que
+> Atualizado em **2026-09-02**, versão `0.3.4`. Onde o projeto está e o que
 > precisa do Samir. Escopo e fases em
 > [`escopo-projeto.md`](escopo-projeto.md).
+
+## Since 2026-09-02
+
+The two lines had diverged at `0.2.4` and were reconciled by **merge**: this tree
+had `0.3.0`–`0.3.3` (ADR-015 — an empty queue under a clock refills instead of
+ending), `origin/master` had `0.2.5`–`0.2.6` (the session adoption stops being
+inherited by omission — P-09). Both numbered a delivery `0.2.5`; nothing was
+renumbered, and `version.md` carries the collision note.
+
+On top of that, `0.3.4`: `armar` now seeds **`.loop/loop.sh`** in the target
+repository — `./.loop/loop.sh` arms for 6h and opens the panel,
+`./.loop/loop.sh 10h` takes any duration. Root derived from the script's own
+path, never overwritten, and it asks for `--adotar-primeira-parada` out loud
+because a shell cannot know its own `session_id` (ADR-016). **248 tests**, six
+controls each proven by a mutation.
+
+⛔ Still unmeasured, and unchanged by this: P-05 (distribution of end conditions,
+work per iteration, classification error rate). The rounds since 16/08 do not add
+up to a distribution.
 
 ## Onde está
 
 **F0 e F1 entregues no mesmo dia; duas rodadas reais feitas.** O motor existe,
-roda e tem 228 testes com os controles verificados por mutação. A rodada de 16/08
+roda e tem 248 testes com os controles verificados por mutação. A rodada de 16/08
 no EOP fechou 21/21 itens em 68 minutos com duas paradas, e a auditoria dela
 achou o defeito central do produto (ADR-012). **Duas rodadas não são medição:** a
 distribuição das condições de fim, o trabalho por iteração e a taxa de erro de
@@ -23,9 +42,10 @@ escrito.
 ## O que roda hoje
 
 ```bash
-python3 -m unittest discover -s tests -v      # 228 testes, sem modelo, sem rede
+python3 -m unittest discover -s tests -v      # 248 testes, sem modelo, sem rede
 ./install.sh --dry-run                        # mostra o que faria
-loop-ctl armar --raiz <repo> --objetivo "..." --itens 10
+loop-ctl armar --raiz <repo> --objetivo "..." --itens 10 --sessao <id>
+./.loop/loop.sh [6h]                          # rearma por tempo e abre o painel
 loop-ctl porque --raiz <repo>                 # por que não continuou
 loop-watch --raiz <repo> --ate-encerrar       # acompanhar de longe
 ```

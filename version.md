@@ -1,6 +1,6 @@
 # Versão — skill-LOOP
 
-**Versão atual:** `0.3.3`
+**Versão atual:** `0.3.4`
 
 > Este arquivo é a **fonte da verdade** da versão do projeto. Qualquer lugar que
 > precise exibir ou reportar a versão extrai o **primeiro número semver (`X.Y.Z`)**
@@ -60,6 +60,72 @@ da mesma entrega repetem a versão.
 ---
 
 ## 3. Changelog
+
+### `0.3.4` — 2026-09-02 — o rearme por tempo vira arquivo no alvo
+
+Subir uma rodada por tempo custava dois comandos, em dois terminais, com um
+caminho em cada. Ninguém decora isso, então no EOP virou um `loop.sh` escrito à
+mão na raiz do repositório — e **ele está lá até hoje**, com os dois defeitos que
+o impediam de virar produto: a raiz é um literal (`--raiz ~/x/EOP`), o que prende
+o arquivo a uma árvore e morre no primeiro clone; e ele não chega sozinho, cada
+repositório alvo dependia de alguém lembrar de escrevê-lo.
+
+#### O atalho é semeado pelo próprio `armar`
+
+- Novo molde versionado em `skill/loop/templates/loop.sh`; `armar` grava
+  `.loop/loop.sh` (modo 755) **quando ele não existe**, substituindo dois
+  placeholders pelos caminhos absolutos desta cópia do skill.
+- `./.loop/loop.sh` arma por **6h** e abre o painel; `./.loop/loop.sh 10h` toma
+  qualquer duração que o `parse_duracao` aceite.
+- A raiz é **derivada** (`dirname "${BASH_SOURCE[0]}"/..`), não escrita: mover,
+  clonar ou renomear o repositório continua funcionando. É a diferença entre o
+  molde e o original que ele substitui.
+- Prefere `loop-ctl`/`loop-watch` do `PATH` e cai no caminho absoluto da cópia
+  que semeou — mesma razão do shim do `install.sh`: dizer qual cópia serve.
+- **Nunca sobrescreve.** A cópia no alvo é do dono: é no bloco `EXTRA=(...)` dela
+  que `--objetivo`, `--janela` e `--itens` sobrevivem entre rodadas. Apagar o
+  arquivo é o jeito de pedir um novo.
+- A semeadura roda **depois** de `loop.iniciar()`, nunca junto do esqueleto do
+  `QUEUE.md`: comando que recusa não pode deixar arquivo atrás. E erro de I/O
+  sai calado — derrubar um `armar` que já armou por causa de um atalho inverteria
+  o fail-open do ADR-009.
+
+#### A adoção de sessão é pedida em voz alta, e é a mesma P-09
+
+O atalho passa `--adotar-primeira-parada` e imprime o aviso na saída de erro
+**antes** de armar. Um shell não conhece o próprio `session_id`, e este é
+exatamente o caso que a P-09 mediu — a rodada do EOP que adotou a sessão aberta
+para triar PRs do Dependabot. A guarda do `0.2.6` foi desenhada em torno dele:
+recusar sem saída quebraria este arquivo. O que a guarda compra é a adoção ser
+**dita**; o que o aviso compra é o operador ouvir no único momento em que ainda
+dá para fechar os outros chats.
+
+Sem `--ate-encerrar` no watch, de propósito: turno que morre sem emitir `Stop`
+prende a rodada em `ativo: true` (P-08), e script bloqueado nessa flag penduraria
+para sempre. Ctrl+C sai do painel; a rodada segue.
+
+#### Também neste commit
+
+O merge da `origin/master` (`0.2.5` e `0.2.6`) entrou logo antes, em commit
+próprio. As duas linhas haviam divergido no `0.2.4` e alocaram o número `0.2.5`
+em paralelo, para entregas diferentes — o changelog ganhou a nota da colisão, e
+nada foi renumerado, porque cada número está preso à mensagem de um commit
+publicado.
+
+**Testes: 248** (13 novos, `tests/test_atalho.py`), verdes. Metade olha a
+semeadura; a outra metade **executa o script gerado**, com `loop-ctl` e
+`loop-watch` trocados por stubs à frente do `PATH` — testar só o texto do arquivo
+passaria por cima de tudo que quebra num shell.
+
+**Seis controles, seis mutações:** desligar a chamada da semeadura derruba **10**
+testes; movê-la para antes das guardas, **1** (o que exige que um `armar` recusado
+não deixe arquivo); tirar a guarda de "nunca sobrescreve", **2**; tomar a raiz do
+`pwd` em vez do caminho do script, **2**; remover o aviso de sessão, **4**;
+desligar o `set -e`, **1**.
+
+⛔ **Não medido:** se o atalho muda alguma coisa na taxa de rodada armada com a
+sessão errada. Ele torna a adoção visível no instante certo, mas quem fecha os
+outros chats é o operador — e isso é comportamento, não código.
 
 ### `0.3.3` — 2026-08-18 — o changelog volta a bater com o log
 

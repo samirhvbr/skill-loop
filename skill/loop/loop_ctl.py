@@ -34,6 +34,12 @@ REABASTECER = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))),
     "prompts", "reabastecer.md")
 
+# O diretório desta cópia do skill. O atalho semeado no repositório ALVO cai
+# nele quando `loop-ctl`/`loop-watch` não estão no PATH — mesma razão do shim
+# do `install.sh`: deixar explícito qual cópia está servindo.
+SKILL_DIR = os.path.dirname(os.path.realpath(__file__))
+MOLDE_ATALHO = os.path.join(SKILL_DIR, "templates", "loop.sh")
+
 ESQUELETO_FILA = """# Fila do loop
 
 Uma linha por unidade de trabalho. O hook lê **o primeiro `- [ ]`** e é ele que
@@ -93,6 +99,40 @@ def _recusar_fila_vazia(loop, args, verbo):
           "a fila vazia não encerra, ela vira turno de reabastecimento (ADR-015).")
     print("      Para armar mesmo assim, sem relógio: --mesmo-sem-fila.")
     return 2
+
+
+def _semear_atalho(loop):
+    """Grava `.loop/loop.sh` quando ele não existe. Devolve `True` se criou.
+
+    O atalho existe porque a linha que sobe uma rodada por tempo não cabe na
+    memória de ninguém: no EOP ela virou um `loop.sh` escrito à mão, com a raiz
+    **literal** (`--raiz ~/x/EOP`) — o que prende o arquivo a um repositório e
+    morre no primeiro clone. Aqui a raiz é derivada do caminho do próprio
+    script, e quem escreve o arquivo é o comando que já está criando o `.loop/`.
+
+    **Nunca por cima.** A cópia no alvo é do dono — é nela que ele põe
+    `--objetivo`, `--janela`, `--itens`, e sobrescrever apagaria a configuração
+    dele a cada `armar`. Mesma regra do esqueleto do `QUEUE.md`.
+
+    Erro de I/O sai calado e devolve `False`: a semeadura acontece **depois** de
+    o estado estar gravado, e derrubar um `armar` que já armou por causa de um
+    atalho seria trocar a rodada por uma conveniência (ADR-009).
+    """
+    destino = loop.p("loop.sh")
+    if os.path.exists(destino):
+        return False
+    try:
+        with open(MOLDE_ATALHO, encoding="utf-8") as f:
+            texto = f.read()
+        texto = (texto
+                 .replace("@LOOP_CTL_PY@", os.path.join(SKILL_DIR, "loop_ctl.py"))
+                 .replace("@LOOP_WATCH_PY@", os.path.join(SKILL_DIR, "loop_watch.py")))
+        with open(destino, "w", encoding="utf-8") as f:
+            f.write(texto)
+        os.chmod(destino, 0o755)
+    except (IOError, OSError):
+        return False
+    return True
 
 
 def cmd_armar(args):
@@ -190,6 +230,9 @@ def cmd_armar(args):
         escopo_itens=args.itens,
         escopo_ate=args.ate,
     )
+    # Depois de `iniciar`, nunca antes: `armar` que recusa não pode deixar
+    # arquivo atrás, e o atalho é a única coisa aqui que sobrevive ao comando.
+    atalho_novo = _semear_atalho(loop)
     pend, feitos = loop.contagem_fila()
     print("loop armado em %s" % loop.dir)
     print("  objetivo   : %s" % objetivo_para_exibir(st["objetivo"]))
@@ -202,6 +245,9 @@ def cmd_armar(args):
     print("  sessão     : %s" % (
         st["session_id"] or ("qualquer (não amarra)" if not st.get("bind_session")
                              else "a primeira que parar — ADOÇÃO PEDIDA")))
+    if atalho_novo:
+        print("  atalho     : .loop/loop.sh criado — `./.loop/loop.sh` rearma "
+              "por 6h, `./.loop/loop.sh 10h` por outro tempo")
     if pend == 0 and tem_relogio(st):
         print("\n⚠️  fila vazia + relógio: a **primeira parada é turno de "
               "reabastecimento** — o hook manda destilar o próximo bloco, não "

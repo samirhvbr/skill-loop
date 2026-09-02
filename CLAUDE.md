@@ -3,7 +3,7 @@
 > **Leia também:** [README_br.md](README_br.md) (o produto, canônico) ·
 > [SECURITY.md](SECURITY.md) (**leitura obrigatória** — modelo de ameaça) ·
 > [SPEC.md](SPEC.md) (pipeline normativo e formato do `.loop/`) ·
-> [docs/decisoes.md](docs/decisoes.md) (ADR-001 a ADR-014 + pendências) ·
+> [docs/decisoes.md](docs/decisoes.md) (ADR-001 a ADR-016 + pendências) ·
 > [prompts/continuacao.md](prompts/continuacao.md) (o prompt do produto) ·
 > [version.md](version.md) (versão + formato de commit).
 >
@@ -53,10 +53,13 @@ O que **existe e roda** (`0.1.0`, 16/08/2026):
   condições de fim em **uma** cópia (o hook consome ela) — ADR-013.
 - `skill/loop/loop_watch.py` — acompanhamento de longe (delta + tempo restante).
 - `install.sh` — hook global idempotente, `--dry-run`, `--uninstall`.
-- **228 testes**, controles verificados por mutação.
+- `skill/loop/templates/loop.sh` — o atalho que `armar` semeia em
+  `.loop/loop.sh` do repositório alvo: `./.loop/loop.sh [6h]` rearma e abre
+  o painel, com a raiz derivada e sem sobrescrever a cópia do dono (ADR-016).
+- **248 testes**, controles verificados por mutação.
 
 ```bash
-python3 -m unittest discover -s tests -v      # 228 testes, sem modelo, sem rede
+python3 -m unittest discover -s tests -v      # 248 testes, sem modelo, sem rede
 ./install.sh --dry-run                        # mostra o que faria
 loop-watch --uma-vez --raiz <repo>            # uma leitura do acompanhamento
 ```
@@ -128,6 +131,14 @@ mensagens vagas.
 13. `objetivo` é **reportado, nunca executado**: recusado por `armar` e
     substituído na exibição pela mesma régua (`estado.objetivo_legivel`). O
     número de uma parada vem do **nome do arquivo**, nunca da iteração.
+14. A adoção de sessão é **pedida, nunca herdada**: sem `--sessao`, `armar`
+    recusa e nomeia as três saídas (`--adotar-primeira-parada`,
+    `--qualquer-sessao`) — emenda do ADR-008, custo medido na P-09.
+15. O rearme por tempo é **arquivo no alvo**: `armar` semeia `.loop/loop.sh`
+    quando ausente, com a raiz **derivada** do caminho do script, e **nunca**
+    sobrescreve — a cópia é do dono, é onde as flags dele sobrevivem entre
+    rodadas. Semeadura depois do estado gravado, e falhar nela nunca derruba
+    o `armar` (ADR-016).
 
 E o que o LOOP **nunca** faz: agir sem `.loop/` armado, criar `.loop/` sozinho,
 apagar ou reescrever `ASSUMPTIONS.md`, escrever fora de `.loop/`, chamar rede ou

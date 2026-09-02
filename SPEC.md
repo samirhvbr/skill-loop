@@ -286,8 +286,21 @@ o motor não tem por que assumir que existe um próximo bloco.
 ├── STOP              kill-switch do DONO (presença basta)
 ├── SCOPE.md          escopo do reabastecimento — opcional, lido verbatim
 ├── SEM-ESCOPO        veredito do AGENTE: não há bloco em escopo (presença basta)
+├── loop.sh           atalho de rearme por tempo — semeado, nunca sobrescrito
 └── entries/NNNN-{ASK,DOC}-slug.md
 ```
+
+`loop.sh` is seeded by `armar` when absent and **never** overwritten: it is the
+owner's copy, and that is where `--objetivo`, `--janela` and `--itens` live
+between rounds. `./.loop/loop.sh` arms for 6h and opens the panel;
+`./.loop/loop.sh 10h` takes any duration `parse_duracao` accepts. It derives the
+root from its own path — a literal root is what tied the hand-written original
+to a single repository — prefers `loop-ctl`/`loop-watch` from `PATH` and falls
+back to the absolute path of the skill copy that seeded it. It asks for
+`--adotar-primeira-parada` and warns on stderr first, because a shell cannot
+know its own `session_id` (ADR-008 amendment, P-09). Deleting it is safe: the
+next `armar` writes a fresh copy. A failure to write it never fails `armar` —
+seeding happens after the state is on disk (ADR-016).
 
 `SCOPE.md` é **entrada** escrita pelo dono; `SEM-ESCOPO` é **saída** escrita pelo
 agente. Nenhum dos dois é criado por `armar` — mas `armar` **apaga** o `SEM-ESCOPO`

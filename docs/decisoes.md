@@ -523,6 +523,57 @@ ADR. Decisão nova entra aqui, com data e status, no mesmo commit da mudança.
 
 ---
 
+## ADR-016 — The timed re-arm is a file in the target repo, not a line the operator memorises
+
+- **Date:** 2026-09-02 · **Status:** Accepted · **Extends:** ADR-010 (end
+  conditions), ADR-008 amendment (session adoption)
+- **Observed fact.** Starting a timed round takes two commands, in two
+  terminals, with a path in each: `loop-ctl armar --raiz <repo> --duracao 6h`
+  and `loop-watch --raiz <repo>`. Nobody memorises that, so in EOP it became a
+  hand-written `loop.sh` at the root of the repository — and it is still there.
+  That file carried two defects that stop it from shipping as it stands. Its
+  root was a **literal** (`--raiz ~/x/EOP`), which ties the file to one tree and
+  dies at the first clone. And it did not arrive on its own: every target
+  repository needed someone to remember to write it.
+- **Decision.** `armar` seeds `.loop/loop.sh` when the file is absent. The root
+  is **derived** from the script's own path (`dirname "${BASH_SOURCE[0]}"/..`),
+  the duration is an optional argument defaulting to `6h`, and the script
+  prefers `loop-ctl`/`loop-watch` from `PATH`, falling back to the absolute path
+  of the skill copy that seeded it — the same reason `install.sh` writes shims
+  instead of symlinks: say which copy is serving.
+- **Never overwritten.** The copy in the target repository is the **owner's** —
+  it is where `--objetivo`, `--janela` and `--itens` live between rounds — so
+  re-seeding it on every `armar` would erase his configuration. Same rule as the
+  `QUEUE.md` skeleton. Deleting the file is the way to ask for a fresh one.
+- **Seeded after the state, and it may fail.** The call sits after
+  `loop.iniciar()`, never with the `QUEUE.md` skeleton before the guards: a
+  command that refuses must leave nothing behind, which is what the empty-queue
+  and session guards both already pay for. And an I/O failure is silent and
+  returns `False` — trading a round for a convenience would invert the fail-open
+  of ADR-009.
+- **It asks for the session adoption out loud.** A shell cannot know its own
+  `session_id`, so the shortcut passes `--adotar-primeira-parada` and prints the
+  warning on stderr first. This is exactly the case P-09 measured, and the case
+  the `0.2.6` guard was shaped around: refusing without an exit would break this
+  very file. What the guard buys is that the adoption is **said**; what the
+  warning buys is that the operator hears it at the only moment he can still
+  close the other chats.
+- **No `--ate-encerrar` on the watch,** deliberately: a turn that dies without
+  emitting `Stop` pins the round at `ativo: true` (P-08), and a script blocked on
+  that flag would hang forever. Ctrl+C leaves the panel; the round keeps running.
+- **Alternative rejected:** a `loop-ctl atalho` subcommand. A new command is one
+  more thing to memorise, which is the problem this decision removes.
+- **Cost of undoing:** delete the template and the helper. Nothing reads the
+  file; no state depends on it.
+- **Controls, and the mutation that proves each.** Six mutations over 248 green
+  tests: removing the seeding call drops **10**; moving it ahead of the guards
+  drops **1** (the one that asserts a refused `armar` leaves no file); dropping
+  the never-overwrite check drops **2**; taking the root from `pwd` instead of
+  the script path drops **2**; removing the session warning drops **4**;
+  disabling `set -e` drops **1**.
+
+---
+
 ## Pendências
 
 | # | Pendência | Estado |

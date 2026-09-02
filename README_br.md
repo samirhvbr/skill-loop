@@ -206,6 +206,33 @@ em 17/08/2026: **14 paradas seguidas sem encerrar, 13 reabastecimentos, fila de
 22 → 66 itens**, e o fim por veredito escrito — sete hipóteses tabeladas, três
 viraram bloco, três mediram zero (ADR-014).
 
+### Rearmar do terminal — `.loop/loop.sh`
+
+O primeiro `armar` num repositório semeia um atalho ao lado do estado que ele
+dirige:
+
+```bash
+./.loop/loop.sh          # arma por 6h e abre o painel
+./.loop/loop.sh 10h      # qualquer duração que o parse_duracao aceite: 6h | 90m | 2h30
+```
+
+Ele **deriva** a raiz do próprio caminho, então sobrevive a mover, clonar ou
+renomear o repositório — o original escrito à mão que ele substitui carregava um
+`--raiz ~/x/EOP` literal e estava preso a uma árvore só. Prefere o
+`loop-ctl`/`loop-watch` do `PATH` e cai no caminho absoluto da cópia do skill que
+o semeou, então funciona antes de o `PATH` estar arrumado.
+
+Ele **nunca é sobrescrito**: a cópia no seu repositório é sua, e o bloco
+`EXTRA=(...)` comentado lá embaixo é onde `--objetivo`, `--janela` e `--itens`
+sobrevivem de uma rodada para a outra. Apague o arquivo e o `armar` seguinte
+escreve um novo.
+
+⚠️ Um shell não conhece o próprio `session_id`, então o atalho pede
+`--adotar-primeira-parada` e avisa na saída de erro antes de armar: a rodada se
+amarra à **primeira sessão que terminar um turno** naquele repositório, que pode
+ser um chat que você deixou aberto para outra coisa. Fechar os outros é a metade
+que só você faz (emenda do ADR-008, P-09).
+
 ## Acompanhar de longe
 
 ```bash
@@ -269,6 +296,7 @@ havia uma linha de log sobre nenhum deles.
 ├── STOP              kill-switch, seu (se existir)
 ├── SCOPE.md          fronteira do reabastecimento — opcional, lida verbatim
 ├── SEM-ESCOPO        veredito do agente: não há bloco em escopo
+├── loop.sh           atalho de rearme — semeado uma vez, depois é seu
 └── entries/NNNN-{ASK,DOC}-slug.md
 ```
 

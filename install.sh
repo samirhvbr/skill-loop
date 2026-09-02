@@ -119,3 +119,7 @@ echo
 echo "Pronto. O hook está inerte em todo repositório sem .loop/."
 echo "Para começar, no repositório alvo:  /loop-work <objetivo>"
 echo "Para acompanhar de outro terminal:  loop-watch"
+echo
+echo "O primeiro armar deixa .loop/loop.sh no repositório alvo: dali em diante"
+echo "  ./.loop/loop.sh      arma por 6h e abre o painel"
+echo "  ./.loop/loop.sh 10h  outro tempo. O arquivo é seu — nunca é sobrescrito."

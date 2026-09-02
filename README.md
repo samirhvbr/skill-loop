@@ -194,6 +194,32 @@ became the engine, on 2026-08-17: **14 consecutive stops without ending, 13 refi
 queue from 22 to 66 items**, ending by written verdict — seven hypotheses tabulated,
 three became blocks, three measured zero (ADR-014).
 
+### Re-arming from the terminal — `.loop/loop.sh`
+
+The first `armar` in a repository seeds a shortcut next to the state it drives:
+
+```bash
+./.loop/loop.sh          # arm for 6h and open the panel
+./.loop/loop.sh 10h      # any duration parse_duracao accepts: 6h | 90m | 2h30
+```
+
+It derives the repository root from its own path, so it survives a move, a clone
+or a rename — the hand-written original it replaces carried a literal `--raiz
+~/x/EOP` and was tied to one tree. It prefers `loop-ctl`/`loop-watch` from `PATH`
+and falls back to the absolute path of the skill copy that seeded it, so it works
+before the `PATH` is set up.
+
+It is **never overwritten**: the copy in your repository is yours, and the
+commented `EXTRA=(...)` block near the bottom is where `--objetivo`, `--janela`
+and `--itens` survive between rounds. Delete the file and the next `armar` writes
+a fresh one.
+
+⚠️ A shell does not know its own `session_id`, so the shortcut asks for
+`--adotar-primeira-parada` and says so on stderr before arming: the round binds
+to the **first session that ends a turn** in that repository, which may be a chat
+you left open for something else. Close the others first — that half is yours
+(ADR-008 amendment, P-09).
+
 ## Watching it from a distance
 
 ```bash
@@ -238,6 +264,7 @@ was not one line of log about any of them.
 ├── STOP              kill-switch, yours (presence is enough)
 ├── SCOPE.md          refill boundary you declare — optional, read verbatim
 ├── SEM-ESCOPO        the agent's verdict: nothing in scope left
+├── loop.sh           re-arm shortcut — seeded once, then yours
 └── entries/NNNN-{ASK,DOC}-slug.md
 ```
 
