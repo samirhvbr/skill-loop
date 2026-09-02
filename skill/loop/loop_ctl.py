@@ -80,6 +80,42 @@ def cmd_armar(args):
         print("      Escreva uma linha de verdade, ou omita o argumento.")
         return 2
 
+    # ⚠️ A ADOÇÃO SILENCIOSA DE SESSÃO — o defeito de 01–02/09 no EOP, e a
+    # razão de esta guarda ficar na PORTA.
+    #
+    # `bind_session: true` com `session_id: null` **não** amarra à sessão que
+    # armou: amarra à PRIMEIRA que terminar um turno naquele repositório — e
+    # qualquer chat já aberto ali serve. O `print` abaixo sempre disse a verdade
+    # (`sessão: a primeira que parar`); o que faltava era a escolha ser
+    # explícita. No EOP o loop adotou uma sessão que o dono havia aberto para
+    # triar PRs do Dependabot, enquanto o `loop.sh` armava de outra, e o custo
+    # medido foi: **18 entradas** de diário arquivadas sob itens com que nada
+    # tinham a ver, **4 itens espúrios** colhidos de fragmentos daquelas
+    # mensagens, e **duas sessões dirigidas contra a mesma árvore** — quatro
+    # colisões de `version.md`, duas `master` vermelhas e dois commits que
+    # anunciaram trabalho que o diff não continha.
+    #
+    # ⛔ **Ela NÃO proíbe a adoção, e isso é deliberado:** quem arma de um shell
+    # não sabe o próprio `session_id`, então recusar sem saída tornaria a
+    # ferramenta inutilizável — e ferramenta que atrapalha é ferramenta que vira
+    # `--force` na semana seguinte. O que a guarda cobra é que a adoção seja
+    # **escolhida**, nunca herdada por omissão.
+    if not args.qualquer_sessao and not args.sessao \
+            and not args.adotar_primeira_parada:
+        print("erro: sem `--sessao`, `bind_session` adota a PRIMEIRA sessão que")
+        print("      parar neste repositório — não a que está armando. Qualquer")
+        print("      chat já aberto aqui serve, e foi assim que uma rodada do EOP")
+        print("      adotou a sessão do dono em 01/09 (18 entradas arquivadas no")
+        print("      item errado, 4 itens espúrios, duas sessões na mesma árvore).")
+        print()
+        print("      Escolha uma das três, para que a adoção seja decisão:")
+        print("        --sessao <id>              amarra a ESTA sessão (o id que")
+        print("                                   o agente conhece)")
+        print("        --adotar-primeira-parada   aceita a adoção de propósito")
+        print("        --qualquer-sessao          não amarra a nenhuma; qualquer")
+        print("                                   sessão do repo dirige o loop")
+        return 2
+
     st = loop.iniciar(
         objetivo=args.objetivo or "",
         session_id=args.sessao,
@@ -104,7 +140,9 @@ def cmd_armar(args):
           % (st["max_iteracoes"], st["max_sem_progresso"]))
     print("  política   : ASK=%s · colheita=%s · notificar=%s"
           % (st["politica_ask"], st["colher_itens"], st["notificar"]))
-    print("  sessão     : %s" % (st["session_id"] or "a primeira que parar"))
+    print("  sessão     : %s" % (
+        st["session_id"] or ("qualquer (não amarra)" if not st.get("bind_session")
+                             else "a primeira que parar — ADOÇÃO PEDIDA")))
     if pend == 0:
         print("\n⚠️  fila vazia: o loop encerra na primeira parada. "
               "Preencha .loop/QUEUE.md antes de começar.")
@@ -341,6 +379,10 @@ def main(argv=None):
     a.add_argument("--politica", default=PADRAO["politica_ask"],
                    choices=["continuar", "continuar-exceto-irreversivel", "parar"])
     a.add_argument("--sessao", default=None, help="session_id a que o loop se prende")
+    a.add_argument("--adotar-primeira-parada", action="store_true",
+                   help="aceita DE PROPÓSITO que o loop adote a primeira sessão "
+                        "que parar neste repo (o padrão histórico, que agora "
+                        "exige ser dito)")
     a.add_argument("--qualquer-sessao", action="store_true",
                    help="não prender a uma sessão (qualquer chat no repo dirige o loop)")
     a.add_argument("--sem-colheita", action="store_true",

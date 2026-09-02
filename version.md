@@ -1,6 +1,6 @@
 # Versão — skill-LOOP
 
-**Versão atual:** `0.2.5`
+**Versão atual:** `0.2.6`
 
 > Este arquivo é a **fonte da verdade** da versão do projeto. Qualquer lugar que
 > precise exibir ou reportar a versão extrai o **primeiro número semver (`X.Y.Z`)**
@@ -60,6 +60,48 @@ da mesma entrega repetem a versão.
 ---
 
 ## 3. Changelog
+
+### `0.2.6` — 2026-09-02 — a adoção de sessão deixa de ser herdada por omissão
+
+**A primeira das três saídas da P-09, e a única que cabia com a rodada viva.** O
+`0.2.5` registrou o defeito e não o consertou, pela norma que o `0.2.4` já havia
+escrito: mexer em `hooks/` ou `lib/` com rodada em curso faz o hook sair
+fail-open e travar a rodada no meio. **Medido agora, e é o que destravou:** o
+`hooks/loop-stop.py` importa `classificador`, `diagnostico`, `estado` e
+`transcricao` — todos de `lib/` — e **não importa `loop_ctl.py`**. O `armar`,
+portanto, está fora do caminho do hook, exatamente como o `loop_watch.py` estava
+no `0.2.4`. As outras duas saídas (marcador do processo, lock de árvore) moram no
+hook e em `lib/`, e continuam esperando rodada morta.
+
+**O que muda:** `armar` recusa-se a armar com `bind_session: true` e sem
+`--sessao`, e nomeia as três saídas — `--sessao <id>`,
+`--adotar-primeira-parada` (novo) e `--qualquer-sessao`.
+
+⛔ **Não é a "falha ruidosa" pura que a P-09 propunha, e a diferença foi
+medida:** o `loop.sh` do EOP arma com `loop-ctl armar --raiz ~/x/EOP --duracao
+10h`, **sem `--sessao`** — uma recusa seca quebraria o script do dono, e guarda
+que atrapalha vira `--force` na semana seguinte. Também não se pode exigir o id:
+o ADR-008 já descartou isso porque **ninguém sabe o próprio de cor**. Então o
+comportamento histórico continua alcançável em uma palavra; o que ele deixa de
+ser é **herdado por omissão** — o único jeito em que custou caro.
+
+**A guarda recusa SEM GRAVAR ESTADO**, e isso é o segundo controle, não detalhe:
+`.loop/` meio-armado é o defeito que o `0.2.3` pagou com o `¨¨` — estado gravado
+antes de uma guarda não passa a obedecê-la depois, e um `retomar` o reativaria
+sem passar pela escolha. O teste afirma `ler() is None`, que é o desfecho mais
+forte disponível.
+
+O resumo do `armar` passa a dizer **como** a sessão foi escolhida
+(`a primeira que parar — ADOÇÃO PEDIDA` · `qualquer (não amarra)`): a linha
+antiga era verdadeira e ambígua, e foi lida como default por uma rodada inteira.
+
+**Testes: 188 → 193.** ADR-008 ganha emenda; a P-09 registra a saída entregue e
+as duas que restam.
+
+| Controle desligado | Testes que caem |
+|---|---|
+| a guarda de porta sai (adoção volta a ser o default silencioso) | 2 |
+| o resumo volta a não dizer COMO a sessão foi escolhida | 2 |
 
 ### `0.2.5` — 2026-09-02 — o auto-bind adotou a sessão errada, e o ADR dizia "necessariamente"
 
