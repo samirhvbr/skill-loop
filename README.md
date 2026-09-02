@@ -7,8 +7,10 @@ decision) or **DOC** (it was just reporting work done), files it under `.loop/`,
 and hands the agent back the next item on the queue.
 
 > 🇧🇷 **[README_br.md](README_br.md) is the canonical version** — this repository
-> is written in Portuguese. This file is the English front door and is kept in
-> sync with it.
+> was written in Portuguese. This file is the English front door and is kept in
+> sync with it. **Since 2026-09-02 new writing is in English**: `version.md` and
+> commit messages are already there, the remaining documents follow as they are
+> touched.
 >
 > **Docs:** [CLAUDE.md](CLAUDE.md) / [AGENTS.md](AGENTS.md) (rules for whoever
 > develops this repo) · [SECURITY.md](SECURITY.md) (threat model — required

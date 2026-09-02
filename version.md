@@ -1,712 +1,740 @@
-# Versão — skill-LOOP
+# Version — skill-LOOP
 
-**Versão atual:** `0.3.5`
+**Current version:** `0.3.5`
 
-> Este arquivo é a **fonte da verdade** da versão do projeto. Qualquer lugar que
-> precise exibir ou reportar a versão extrai o **primeiro número semver (`X.Y.Z`)**
-> encontrado aqui. Mantenha a linha **"Versão atual"** sempre como a primeira
-> ocorrência de um número de versão. Mesma mecânica dos projetos-irmãos
+> This file is the **source of truth** for the project's version. Anywhere that
+> needs to display or report the version extracts the **first semver number
+> (`X.Y.Z`)** found here. Always keep the **"Current version"** line as the first
+> occurrence of a version number. Same mechanics as the sibling projects
 > (AUDITOR, COMMITTER).
 
 ---
 
-## 1. Convenção de Versionamento (`X.Y.Z`)
+## 1. Versioning convention (`X.Y.Z`)
 
-| Componente | Significado | Como sobe |
+| Component | Meaning | How it moves |
 |---|---|---|
-| **X** | Release estável — loop operando em trabalho real da casa | Manual |
-| **Y** | Mudança estrutural — fase concluída, mudança de contrato (`STATE.json`, formato do `.loop/`), ADR aceito que muda a direção | Manual |
-| **Z** | Incremento a cada entrega | A cada entrega |
+| **X** | Stable release — the loop operating on the house's real work | Manual |
+| **Y** | Structural change — phase completed, contract change (`STATE.json`, `.loop/` format), accepted ADR that changes direction | Manual |
+| **Z** | One increment per delivery | Every delivery |
 
-Enquanto `X` for `0`, contratos podem quebrar entre versões `0.Y`.
+While `X` is `0`, contracts may break between `0.Y` versions.
 
-### Gatilhos de bump do `Z`
+### `Z` bump triggers
 
-- Alterar o **léxico do classificador** ou qualquer regra de ASK × DOC.
-- Alterar o **prompt de continuação** (`prompts/continuacao.md`) — é o produto.
-- Alterar guarda-corpos: teto de iterações, sem-progresso, kill-switch, fila.
-- Alterar o esquema do `STATE.json` ou o formato de `.loop/`.
-- Alterar `install.sh` ou `.claude/settings.json`.
-- Criar ou alterar documento em `docs/`, `SPEC.md` ou `prompts/` que **muda uma
-  regra** (não vale corrigir redação).
-- Adicionar ou alterar testes que definem comportamento esperado.
+- Changing the **classifier lexicon** or any ASK × DOC rule.
+- Changing the **continuation prompt** (`prompts/continuacao.md`) — it is the product.
+- Changing guardrails: iteration ceiling, no-progress, kill switch, queue.
+- Changing the `STATE.json` schema or the `.loop/` format.
+- Changing `install.sh`, `vendor.sh` or `.claude/settings.json`.
+- Creating or changing a document under `docs/`, `SPEC.md` or `prompts/` that
+  **changes a rule** (fixing wording does not count).
+- Adding or changing tests that define expected behaviour.
 
-### Gatilhos de bump do `Y`
+### `Y` bump triggers
 
-- Fase concluída (ver `.continue/escopo-projeto.md`).
-- Quebra de compatibilidade no `.loop/` já existente em algum repo.
-- ADR novo com status **Aceito** que muda a direção.
+- A phase completed (see `.continue/escopo-projeto.md`).
+- A compatibility break in a `.loop/` that already exists in some repository.
+- A new ADR with status **Accepted** that changes direction.
 
-> Correções de texto, typo e formatação **não** exigem bump.
+> Text fixes, typos and formatting do **not** require a bump.
 
 ---
 
-## 2. Formato de Commit Obrigatório
+## 2. Mandatory commit format
 
 ```
-X.Y.Z - Descrição curta em português
+X.Y.Z - Short description in English
 ```
 
-**Regras inegociáveis:**
+**Non-negotiable rules:**
 
-1. A versão **sempre** vem deste `version.md`, bumpada **no mesmo commit**.
-2. Mensagem em **português**, descritiva o suficiente para `git log --grep`.
-3. **Proibido** Conventional Commits (`feat:`, `fix:`, `chore:`…) e vago.
-4. Um objetivo por commit; mudanças pequenas e atômicas.
+1. The version **always** comes from this `version.md`, bumped **in the same commit**.
+2. Message in **English**, descriptive enough for `git log --grep`.
+3. Conventional Commits (`feat:`, `fix:`, `chore:`…) and vagueness are **forbidden**.
+4. One objective per commit; small, atomic changes.
 
-O bump entra em **um único commit** por entrega (o primeiro). Commits adicionais
-da mesma entrega repetem a versão.
+The bump goes into **a single commit** per delivery (the first one). Additional
+commits of the same delivery repeat the version.
+
+> ⚠️ **English since 2026-09-02.** Every document in this repository, commit
+> messages included, is written in English. Entries below `0.3.5` were translated
+> in one pass and their wording is the translation, not the original; the numbers,
+> dates, ADR references and measurements are unchanged.
 
 ---
 
 ## 3. Changelog
 
-### `0.3.5` — 2026-09-02 — a cópia versionada ganha ferramenta, e ela é quem sabe da armadilha
+### `0.3.5` — 2026-09-02 — the vendored copy gets a tool, and the tool is what knows the trap
 
-O `install.sh` liga um symlink por config dir do Claude Code: sempre atual, zero
-manutenção. Mas quem quer a skill **dentro** do repositório alvo — commitada,
-para o clone já vir com ela e não depender de instalação global — estava copiando
-`skill/loop/` à mão. Foi o que aconteceu hoje em **27 repositórios** (SHVIA,
-BLUE3, SSHVTERM), e a cópia à mão erra em dois lugares que não avisam.
+`install.sh` links one symlink per Claude Code config dir: always current, zero
+maintenance. But anyone who wants the skill **inside** the target repository —
+committed, so a clone carries it and no global install is needed — was copying
+`skill/loop/` by hand. That is what happened today across **27 repositories**
+(SHVIA, BLUE3, SSHVTERM), and copying by hand gets two things wrong in places
+that never announce themselves.
 
 #### `vendor.sh`
 
-- `./vendor.sh <repo>...` instala ou atualiza a cópia em
-  `<repo>/.claude/skills/loop-work/`; `--dry-run` mostra antes.
-- Re-rodar **é** o update: o diretório é substituído inteiro, nunca mesclado. Um
-  arquivo de versão antiga sobrevivendo à cópia a que pertencia não teria como
-  ser notado.
-- Imprime `versão-antes -> versão-depois` por repositório, lendo o `VERSION.md`
-  que ele mesmo escreveu. Sem isso não há como saber quais das 27 cópias estão
-  velhas — foi exatamente o que faltou no `auditor`, que se instala do mesmo
-  jeito e não carimba versão nenhuma.
-- A versão sai deste `version.md` e a origem inclui o commit: a cópia diz de onde
-  veio, não só o que é.
+- `./vendor.sh <repo>...` installs or updates the copy at
+  `<repo>/.claude/skills/loop-work/`; `--dry-run` shows it first.
+- Re-running **is** the update: the directory is replaced wholesale, never
+  merged. A file from an older version outliving the copy it belonged to would
+  have no way of being noticed.
+- It prints `version-before -> version-after` per repository, reading the
+  `VERSION.md` it wrote itself. Without that there is no way to tell which of the
+  27 copies are stale — which is exactly what is missing from `auditor`, which
+  installs the same way and stamps no version at all.
+- The version comes from this `version.md` and the origin includes the commit:
+  the copy says where it came from, not just what it is.
 
-#### As duas armadilhas que ele fecha
+#### The two traps it closes
 
-- **`prompts/` fica fora do que se copia.** `hooks/loop-stop.py` resolve os
-  templates três níveis acima de `skill/loop/`; a partir de
-  `.claude/skills/loop-work/` isso cai em `<repo>/.claude/prompts/`. Copiar só o
-  diretório do skill deixa o hook sem `continuacao.md` — e a falha é silenciosa
-  até a primeira parada. O script leva os dois arquivos junto.
-- **A cópia tem precedência sobre o symlink global** para o que o agente *lê*
-  (`SKILL.md`, `loop_ctl.py`), enquanto o hook que dirige a continuação é sempre
-  o do repositório. Depois de um bump, a cópia é a metade velha. O `VERSION.md`
-  gerado diz isso por escrito, no lugar onde alguém vai procurar.
+- **`prompts/` falls outside what gets copied.** `hooks/loop-stop.py` resolves
+  its templates three levels above `skill/loop/`; from
+  `.claude/skills/loop-work/` that lands in `<repo>/.claude/prompts/`. Copying
+  only the skill directory leaves the hook without `continuacao.md` — and the
+  failure is silent until the first stop. The script carries both files along.
+- **The copy takes precedence over the global symlink** for what the agent
+  *reads* (`SKILL.md`, `loop_ctl.py`), while the hook that drives the
+  continuation is always the repository's. After a bump, the copy is the stale
+  half. The generated `VERSION.md` says so in writing, in the place someone will
+  look.
 
-Nenhum hook é registrado por repositório, de propósito: o global já cobre todo
-repo e é inerte sem `.loop/STATE.json` ativo — registrar de novo dispararia duas
-vezes.
+No hook is registered per repository, deliberately: the global one already covers
+every repo and is inert without an active `.loop/STATE.json` — registering it
+again would fire it twice.
 
-Sem teste novo: o script não é do caminho de execução do loop (não roda no hook
-nem no `loop_ctl`), e o que ele produz é verificado pelos testes que já existem,
-rodando na cópia. **248 testes**, verdes.
+No new tests: the script is not on the loop's execution path (it runs neither in
+the hook nor in `loop_ctl`), and what it produces is verified by the tests that
+already exist, running against the copy. **248 tests**, green.
 
-### `0.3.4` — 2026-09-02 — o rearme por tempo vira arquivo no alvo
+#### English, from this delivery on
 
-Subir uma rodada por tempo custava dois comandos, em dois terminais, com um
-caminho em cada. Ninguém decora isso, então no EOP virou um `loop.sh` escrito à
-mão na raiz do repositório — e **ele está lá até hoje**, com os dois defeitos que
-o impediam de virar produto: a raiz é um literal (`--raiz ~/x/EOP`), o que prende
-o arquivo a uma árvore e morre no primeiro clone; e ele não chega sozinho, cada
-repositório alvo dependia de alguém lembrar de escrevê-lo.
+Also in `0.3.5`, in its own commit: this `version.md` was translated whole, and §2
+now requires commit messages in English. `CLAUDE.md`, `AGENTS.md` and the
+`README.md` note were corrected in the same pass so the repository stops
+contradicting itself about its own rule. Only wording changed — every number,
+date, ADR reference and measurement below is the original. `README_br.md`,
+`SPEC.md`, `SECURITY.md`, `docs/` and `prompts/` are still in Portuguese and
+follow as they are touched; `prompts/` is product text the hook injects into the
+agent, so translating it changes behaviour and is a delivery of its own.
 
-#### O atalho é semeado pelo próprio `armar`
+### `0.3.4` — 2026-09-02 — re-arming by time becomes a file in the target
 
-- Novo molde versionado em `skill/loop/templates/loop.sh`; `armar` grava
-  `.loop/loop.sh` (modo 755) **quando ele não existe**, substituindo dois
-  placeholders pelos caminhos absolutos desta cópia do skill.
-- `./.loop/loop.sh` arma por **6h** e abre o painel; `./.loop/loop.sh 10h` toma
-  qualquer duração que o `parse_duracao` aceite.
-- A raiz é **derivada** (`dirname "${BASH_SOURCE[0]}"/..`), não escrita: mover,
-  clonar ou renomear o repositório continua funcionando. É a diferença entre o
-  molde e o original que ele substitui.
-- Prefere `loop-ctl`/`loop-watch` do `PATH` e cai no caminho absoluto da cópia
-  que semeou — mesma razão do shim do `install.sh`: dizer qual cópia serve.
-- **Nunca sobrescreve.** A cópia no alvo é do dono: é no bloco `EXTRA=(...)` dela
-  que `--objetivo`, `--janela` e `--itens` sobrevivem entre rodadas. Apagar o
-  arquivo é o jeito de pedir um novo.
-- A semeadura roda **depois** de `loop.iniciar()`, nunca junto do esqueleto do
-  `QUEUE.md`: comando que recusa não pode deixar arquivo atrás. E erro de I/O
-  sai calado — derrubar um `armar` que já armou por causa de um atalho inverteria
-  o fail-open do ADR-009.
+Starting a timed round cost two commands, in two terminals, with a path in each.
+Nobody memorises that, so at EOP it became a `loop.sh` written by hand at the
+root of the repository — and **it is still there today**, with the two defects
+that kept it from becoming product: the root is a literal (`--raiz ~/x/EOP`),
+which pins the file to one tree and dies on the first clone; and it does not
+arrive on its own, so every target repository depended on someone remembering to
+write it.
 
-#### A adoção de sessão é pedida em voz alta, e é a mesma P-09
+#### The shortcut is seeded by `armar` itself
 
-O atalho passa `--adotar-primeira-parada` e imprime o aviso na saída de erro
-**antes** de armar. Um shell não conhece o próprio `session_id`, e este é
-exatamente o caso que a P-09 mediu — a rodada do EOP que adotou a sessão aberta
-para triar PRs do Dependabot. A guarda do `0.2.6` foi desenhada em torno dele:
-recusar sem saída quebraria este arquivo. O que a guarda compra é a adoção ser
-**dita**; o que o aviso compra é o operador ouvir no único momento em que ainda
-dá para fechar os outros chats.
+- New versioned template at `skill/loop/templates/loop.sh`; `armar` writes
+  `.loop/loop.sh` (mode 755) **when it does not exist**, replacing two
+  placeholders with the absolute paths of this copy of the skill.
+- `./.loop/loop.sh` arms for **6h** and opens the dashboard; `./.loop/loop.sh 10h`
+  takes any duration `parse_duracao` accepts.
+- The root is **derived** (`dirname "${BASH_SOURCE[0]}"/..`), not written: moving,
+  cloning or renaming the repository keeps working. That is the difference
+  between the template and the original it replaces.
+- It prefers `loop-ctl`/`loop-watch` from `PATH` and falls back to the absolute
+  path of the copy that seeded it — same reasoning as the `install.sh` shim: say
+  which copy is serving.
+- **It never overwrites.** The copy in the target belongs to its owner: it is in
+  that copy's `EXTRA=(...)` block that `--objetivo`, `--janela` and `--itens`
+  survive between rounds. Deleting the file is how you ask for a new one.
+- Seeding runs **after** `loop.iniciar()`, never alongside the `QUEUE.md`
+  skeleton: a command that refuses must not leave a file behind. And I/O errors
+  stay silent — bringing down an `armar` that already armed because of a
+  shortcut would invert the fail-open of ADR-009.
 
-Sem `--ate-encerrar` no watch, de propósito: turno que morre sem emitir `Stop`
-prende a rodada em `ativo: true` (P-08), e script bloqueado nessa flag penduraria
-para sempre. Ctrl+C sai do painel; a rodada segue.
+#### Session adoption is asked for out loud, and it is the same P-09
 
-#### Também neste commit
+The shortcut passes `--adotar-primeira-parada` and prints the warning on standard
+error **before** arming. A shell does not know its own `session_id`, and this is
+exactly the case P-09 measured — the EOP round that adopted the session opened to
+triage Dependabot PRs. The `0.2.6` guard was designed around it: refusing with no
+way out would break this file. What the guard buys is that adoption is **said**;
+what the warning buys is the operator hearing it at the only moment when closing
+the other chats is still possible.
 
-O merge da `origin/master` (`0.2.5` e `0.2.6`) entrou logo antes, em commit
-próprio. As duas linhas haviam divergido no `0.2.4` e alocaram o número `0.2.5`
-em paralelo, para entregas diferentes — o changelog ganhou a nota da colisão, e
-nada foi renumerado, porque cada número está preso à mensagem de um commit
-publicado.
+No `--ate-encerrar` in the watch, deliberately: a turn that dies without emitting
+`Stop` pins the round at `ativo: true` (P-08), and a script blocked on that flag
+would hang forever. Ctrl+C leaves the dashboard; the round goes on.
 
-**Testes: 248** (13 novos, `tests/test_atalho.py`), verdes. Metade olha a
-semeadura; a outra metade **executa o script gerado**, com `loop-ctl` e
-`loop-watch` trocados por stubs à frente do `PATH` — testar só o texto do arquivo
-passaria por cima de tudo que quebra num shell.
+#### Also in this commit
 
-**Seis controles, seis mutações:** desligar a chamada da semeadura derruba **10**
-testes; movê-la para antes das guardas, **1** (o que exige que um `armar` recusado
-não deixe arquivo); tirar a guarda de "nunca sobrescreve", **2**; tomar a raiz do
-`pwd` em vez do caminho do script, **2**; remover o aviso de sessão, **4**;
-desligar o `set -e`, **1**.
+The merge of `origin/master` (`0.2.5` and `0.2.6`) went in just before, in its own
+commit. The two lines had diverged at `0.2.4` and allocated the number `0.2.5` in
+parallel, for different deliveries — the changelog got the note about the
+collision, and nothing was renumbered, because each number is bound to the message
+of a published commit.
 
-⛔ **Não medido:** se o atalho muda alguma coisa na taxa de rodada armada com a
-sessão errada. Ele torna a adoção visível no instante certo, mas quem fecha os
-outros chats é o operador — e isso é comportamento, não código.
+**Tests: 248** (13 new, `tests/test_atalho.py`), green. Half of them look at the
+seeding; the other half **execute the generated script**, with `loop-ctl` and
+`loop-watch` replaced by stubs ahead of `PATH` — testing only the text of the file
+would step over everything that breaks in a shell.
 
-### `0.3.3` — 2026-08-18 — o changelog volta a bater com o log
+**Six controls, six mutations:** turning off the seeding call drops **10** tests;
+moving it ahead of the guards, **1** (the one demanding that a refused `armar`
+leave no file behind); removing the never-overwrite guard, **2**; taking the root
+from `pwd` instead of the script path, **2**; removing the session warning, **4**;
+turning off `set -e`, **1**.
 
-O bump da 0.3.1 foi feito com `sed` sem âncora e renomeou a entrada histórica
-da 0.3.0 além do cabeçalho. Os dois consertos seguintes tropeçaram: o
-`1d36e61` prometeu na mensagem uma entrada que não escreveu, e o `52898f8`
-truncou o arquivo. Esta entrada fecha os três.
+⛔ **Not measured:** whether the shortcut changes anything in the rate of rounds
+armed against the wrong session. It makes adoption visible at the right instant,
+but the one who closes the other chats is the operator — and that is behaviour,
+not code.
 
-### `0.3.1` — 2026-08-18 — o aviso de encerramento vira ato único
+### `0.3.3` — 2026-08-18 — the changelog matches the log again
 
-O hook reemitia o aviso de fecho em todo stop, sobre um loop já encerrado —
-quatro vezes numa rodada, e uma delas dentro de uma sessão que não era do
-loop. Agora o `STATE.json` marca `notificado` e o aviso sai uma vez só.
+The `0.3.1` bump was done with an unanchored `sed` and renamed the historical
+`0.3.0` entry beyond its heading. The two following fixes stumbled: `1d36e61`
+promised an entry in its message that it did not write, and `52898f8` truncated
+the file. This entry closes all three.
 
-### `0.3.0` — 2026-08-17 — a fila mandava na rodada por tempo, e não era dela a missão
+### `0.3.1` — 2026-08-18 — the shutdown notice becomes a single act
 
-O dono digitou `loop-ctl armar --raiz ~/x/EOP --duracao 6h` sobre uma fila 66/66 e
-tomou `erro: nenhum item - [ ] na fila`. A pergunta que veio junto é a mais curta
-que este projeto recebeu: *"por que o loop está avaliando a fila? o trabalho do loop
-é meio que só dizer continua"*. Ela está certa, e o defeito era de desenho: a fila
-fazia **duas** coisas — o **conteúdo** da continuação (legítimo, insubstituível) e a
-**condição de fim #4** (errada quando há relógio). O guarda-corpo do `0.2.5` foi a
-consequência final: nascido para barrar rodada morta, passou a barrar o caminho
-certo.
+The hook re-emitted the closing notice on every stop, over an already-finished
+loop — four times in one round, one of them inside a session that did not belong
+to the loop. Now `STATE.json` records `notificado` and the notice goes out once.
 
-#### Fila vazia com relógio não encerra: o motor reabastece (ADR-015)
+### `0.3.0` — 2026-08-17 — the queue was running the timed round, and that was never its job
 
-- `fila zerada` **só encerra rodada sem relógio**. Com `duracao_max_min` ou `janela`
-  declarados, a fila vazia sai da cadeia e vira **turno de reabastecimento**.
-  Gatilho **derivado** (`diagnostico.tem_relogio`), não flag nova: quem escreveu
-  `--duracao 6h` já declarou que a missão é o relógio. `STATE.json` **não muda de
-  contrato**, e estado de versão anterior cai no comportamento antigo.
-- Segundo template, `prompts/reabastecimento.md` — o `reabastecer.md` que o dono
-  colava na cauda da fila, virado prompt do motor, com as mesmas cláusulas do
-  ADR-014. O hook escolhe por trabalho: `item is None` + relógio → reabastecer.
-  Mandar o prompt de continuação com `(fila vazia)` no lugar do item seria uma ordem
-  para executar o que não existe.
-- **Escopo** do reabastecimento: `.loop/SCOPE.md` **verbatim** quando existe; senão
-  o `--objetivo`, e o prompt diz ao turno que a fronteira **não foi declarada** e
-  manda recusar o duvidoso. Quem não sabe onde parar precisa saber que não sabe.
-- **Fim novo — `escopo esgotado`**, condição #4, lida de `.loop/SEM-ESCOPO`: o agente
-  mede que não há bloco em escopo, escreve os números, e o `STATUS.md` cita o
-  veredito. Arquivo separado do `STOP` porque um só apagaria **quem** decidiu
-  encerrar: o kill-switch é ordem do dono, este é medição do agente. `armar` apaga o
-  arquivo (depois das guardas); `retomar` não, e `porque` avisa que ele está lá.
-- `armar --duracao`/`--janela` **deixa de recusar** fila vazia, e avisa que a
-  primeira parada é reabastecimento — mais um aviso se falta `SCOPE.md`. Sem
-  relógio, a recusa do `0.2.5` fica intacta, mensagem inclusive.
-- `loop-watch` não pode mais marcar `fila zerada` como fim sob relógio: a linha da
-  fila vira informativa (`fila (não encerra) · N pendente(s) → reabastece`, motivo
-  `None` de propósito) e entra a de `escopo esgotado`. Era este painel que, em
-  17/08, apontava `← encerrou aqui` na fila com `resta 5h22` duas linhas abaixo.
-- `dur()` e o novo `restante_da_rodada()` saíram do `loop_watch` para a lib: o prompt
-  precisa do mesmo formatador, e duas cópias divergem na primeira borda (`0` não é
-  "0min", é "esgotado").
+The owner typed `loop-ctl armar --raiz ~/x/EOP --duracao 6h` over a 66/66 queue and
+got `erro: nenhum item - [ ] na fila`. The question that came with it is the
+shortest this project has received: *"why is the loop evaluating the queue? the
+loop's job is kind of just to say continue"*. It is right, and the defect was in the
+design: the queue was doing **two** things — the **content** of the continuation
+(legitimate, irreplaceable) and **end condition #4** (wrong when there is a clock).
+The `0.2.5` guardrail was the final consequence: born to block a dead round, it
+ended up blocking the right path.
 
-#### O que **não** mudou, de propósito
+#### An empty queue with a clock does not end the round: the engine refills (ADR-015)
 
-- **Rodada por itens** — sem relógio a fila continua sendo o critério de pronto
-  (ADR-006), a recusa do `armar` continua, e o `reabastecer.md` continua sendo o
-  mecanismo dela.
-- **O anti-loop-infinito é o mesmo**: `sem progresso`. Turno que repõe muda a
-  contagem da fila (entra no sha1 da impressão) e zera o contador; turno que não
-  produz nada acumula e encerra em 3 — com teste que prova.
-- **Ordem da cadeia**: kill-switch e tetos continuam na frente do veredito. Ordem do
-  dono acima de medição do agente, e o teto de degeneração acima de tudo que o
-  agente escreve.
+- `fila zerada` **only ends a round with no clock**. With `duracao_max_min` or
+  `janela` declared, the empty queue leaves the chain and becomes a **refill turn**.
+  A **derived** trigger (`diagnostico.tem_relogio`), not a new flag: whoever wrote
+  `--duracao 6h` already declared that the clock is the mission. `STATE.json`
+  **does not change contract**, and state from an earlier version falls back to the
+  old behaviour.
+- A second template, `prompts/reabastecimento.md` — the `reabastecer.md` the owner
+  used to paste at the tail of the queue, turned into an engine prompt, with the
+  same clauses as ADR-014. The hook chooses by the work at hand: `item is None` +
+  clock → refill. Sending the continuation prompt with `(empty queue)` in place of
+  the item would be an order to execute what does not exist.
+- **Scope** of the refill: `.loop/SCOPE.md` **verbatim** when it exists; otherwise
+  the `--objetivo`, and the prompt tells the turn the boundary **was not declared**
+  and orders it to refuse anything doubtful. Whoever does not know where to stop
+  needs to know they do not know.
+- **A new ending — `escopo esgotado`**, condition #4, read from `.loop/SEM-ESCOPO`:
+  the agent measures that there is no block in scope, writes the numbers, and
+  `STATUS.md` quotes the verdict. A file separate from `STOP` because a single one
+  would erase **who** decided to end it: the kill switch is the owner's order, this
+  is the agent's measurement. `armar` deletes the file (after the guards); `retomar`
+  does not, and `porque` warns that it is there.
+- `armar --duracao`/`--janela` **stops refusing** an empty queue, and warns that the
+  first stop is a refill — plus another warning if `SCOPE.md` is missing. With no
+  clock, the `0.2.5` refusal stays intact, message included.
+- `loop-watch` can no longer mark `fila zerada` as an ending under a clock: the queue
+  line becomes informational (`fila (não encerra) · N pendente(s) → reabastece`,
+  reason `None` on purpose) and `escopo esgotado` takes its place. It was this
+  dashboard that, on 17/08, pointed `← encerrou aqui` at the queue with `resta 5h22`
+  two lines below.
+- `dur()` and the new `restante_da_rodada()` moved out of `loop_watch` into the lib:
+  the prompt needs the same formatter, and two copies diverge at the first edge
+  (`0` is not "0min", it is "exhausted").
 
-**228 testes verdes**, +21. Quatro controles, quatro mutações: desligar o gatilho
-derivado derruba 10 testes; o veredito, 5; a guarda do `armar`, 4; a linha do
-painel, 2.
+#### What did **not** change, deliberately
 
-⛔ **Não medido:** se o reabastecimento conduzido pelo motor deriva menos ou mais que
-o conduzido pelo item na cauda — dois prompts com as mesmas cláusulas e contextos
-diferentes. Junta-se à P-05.
+- **Rounds by item count** — with no clock the queue remains the definition of done
+  (ADR-006), the `armar` refusal stays, and `reabastecer.md` remains its mechanism.
+- **The anti-infinite-loop is the same**: `sem progresso`. A turn that refills changes
+  the queue count (which feeds the sha1 of the fingerprint) and resets the counter; a
+  turn that produces nothing accumulates and ends at 3 — with a test proving it.
+- **Order of the chain**: kill switch and ceilings stay ahead of the verdict. The
+  owner's order above the agent's measurement, and the degeneration ceiling above
+  everything the agent writes.
 
-> ⚠️ **Colisão de numeração — as duas `0.2.5` abaixo são entregas
-> diferentes.** Em 18/08 esta árvore seguiu para `0.3.x` sem ter recebido o
-> que a `origin/master` publicou em 02/09, e as duas linhas alocaram `0.2.5`
-> sem saber uma da outra. Nada foi renumerado de propósito: cada número está
-> preso à mensagem de um commit publicado, e mudá-lo aqui quebraria o
-> casamento entre o changelog e o log — que é o defeito que a `0.3.3` acabou
-> de consertar. A reconciliação foi por **merge** em 02/09; a linha segue em
-> `0.3.4`. Ordem abaixo: por versão, com as duas `0.2.5` lado a lado.
+**228 tests green**, +21. Four controls, four mutations: turning off the derived
+trigger drops 10 tests; the verdict, 5; the `armar` guard, 4; the dashboard line, 2.
 
-### `0.2.6` — 2026-09-02 — a adoção de sessão deixa de ser herdada por omissão
+⛔ **Not measured:** whether an engine-driven refill drifts less or more than one
+driven by the item at the tail — two prompts with the same clauses and different
+contexts. It joins P-05.
 
-**A primeira das três saídas da P-09, e a única que cabia com a rodada viva.** O
-`0.2.5` registrou o defeito e não o consertou, pela norma que o `0.2.4` já havia
-escrito: mexer em `hooks/` ou `lib/` com rodada em curso faz o hook sair
-fail-open e travar a rodada no meio. **Medido agora, e é o que destravou:** o
-`hooks/loop-stop.py` importa `classificador`, `diagnostico`, `estado` e
-`transcricao` — todos de `lib/` — e **não importa `loop_ctl.py`**. O `armar`,
-portanto, está fora do caminho do hook, exatamente como o `loop_watch.py` estava
-no `0.2.4`. As outras duas saídas (marcador do processo, lock de árvore) moram no
-hook e em `lib/`, e continuam esperando rodada morta.
+> ⚠️ **Numbering collision — the two `0.2.5` entries below are different
+> deliveries.** On 18/08 this tree moved on to `0.3.x` without having received
+> what `origin/master` published on 02/09, and the two lines allocated `0.2.5`
+> unaware of each other. Nothing was renumbered, deliberately: each number is
+> bound to the message of a published commit, and changing it here would break
+> the match between changelog and log — which is the very defect `0.3.3` had just
+> fixed. Reconciliation was by **merge** on 02/09; the line continues at `0.3.4`.
+> Order below: by version, with the two `0.2.5` side by side.
 
-**O que muda:** `armar` recusa-se a armar com `bind_session: true` e sem
-`--sessao`, e nomeia as três saídas — `--sessao <id>`,
-`--adotar-primeira-parada` (novo) e `--qualquer-sessao`.
+### `0.2.6` — 2026-09-02 — session adoption stops being inherited by omission
 
-⛔ **Não é a "falha ruidosa" pura que a P-09 propunha, e a diferença foi
-medida:** o `loop.sh` do EOP arma com `loop-ctl armar --raiz ~/x/EOP --duracao
-10h`, **sem `--sessao`** — uma recusa seca quebraria o script do dono, e guarda
-que atrapalha vira `--force` na semana seguinte. Também não se pode exigir o id:
-o ADR-008 já descartou isso porque **ninguém sabe o próprio de cor**. Então o
-comportamento histórico continua alcançável em uma palavra; o que ele deixa de
-ser é **herdado por omissão** — o único jeito em que custou caro.
+**The first of P-09's three exits, and the only one that fit with the round still
+alive.** `0.2.5` recorded the defect and did not fix it, following the rule
+`0.2.4` had already written: touching `hooks/` or `lib/` with a round in flight
+makes the hook exit fail-open and strands the round mid-way. **Measured now, and
+this is what unblocked it:** `hooks/loop-stop.py` imports `classificador`,
+`diagnostico`, `estado` and `transcricao` — all from `lib/` — and **does not
+import `loop_ctl.py`**. `armar` is therefore off the hook's path, exactly as
+`loop_watch.py` was in `0.2.4`. The other two exits (a marker for the arming
+process, a tree lock) live in the hook and in `lib/`, and are still waiting for a
+dead round.
 
-**A guarda recusa SEM GRAVAR ESTADO**, e isso é o segundo controle, não detalhe:
-`.loop/` meio-armado é o defeito que o `0.2.3` pagou com o `¨¨` — estado gravado
-antes de uma guarda não passa a obedecê-la depois, e um `retomar` o reativaria
-sem passar pela escolha. O teste afirma `ler() is None`, que é o desfecho mais
-forte disponível.
+**What changes:** `armar` refuses to arm with `bind_session: true` and no
+`--sessao`, and it names the three exits — `--sessao <id>`,
+`--adotar-primeira-parada` (new) and `--qualquer-sessao`.
 
-O resumo do `armar` passa a dizer **como** a sessão foi escolhida
-(`a primeira que parar — ADOÇÃO PEDIDA` · `qualquer (não amarra)`): a linha
-antiga era verdadeira e ambígua, e foi lida como default por uma rodada inteira.
+⛔ **This is not the pure "loud failure" P-09 proposed, and the difference was
+measured:** EOP's `loop.sh` arms with `loop-ctl armar --raiz ~/x/EOP --duracao
+10h`, **without `--sessao`** — a flat refusal would break the owner's script, and
+a guard that gets in the way becomes a `--force` the following week. Nor can the
+id be required: ADR-008 already discarded that because **nobody knows their own by
+heart**. So the historical behaviour stays reachable in one word; what it stops
+being is **inherited by omission** — the only way in which it was expensive.
 
-**Testes: 188 → 193.** ADR-008 ganha emenda; a P-09 registra a saída entregue e
-as duas que restam.
+**The guard refuses WITHOUT WRITING STATE**, and that is the second control, not a
+detail: a half-armed `.loop/` is the defect `0.2.3` paid for with the `¨¨` — state
+written before a guard does not start obeying it afterwards, and a `retomar` would
+reactivate it without passing through the choice. The test asserts `ler() is None`,
+which is the strongest outcome available.
 
-| Controle desligado | Testes que caem |
+The `armar` summary now says **how** the session was chosen
+(`a primeira que parar — ADOÇÃO PEDIDA` · `qualquer (não amarra)`): the old line
+was true and ambiguous, and was read as a default for a whole round.
+
+**Tests: 188 → 193.** ADR-008 gets an amendment; P-09 records the exit delivered
+and the two that remain.
+
+| Control turned off | Tests that fall |
 |---|---|
-| a guarda de porta sai (adoção volta a ser o default silencioso) | 2 |
-| o resumo volta a não dizer COMO a sessão foi escolhida | 2 |
+| the door guard is removed (adoption goes back to being the silent default) | 2 |
+| the summary goes back to not saying HOW the session was chosen | 2 |
 
-### `0.2.5` — 2026-09-02 — o auto-bind adotou a sessão errada, e o ADR dizia "necessariamente"
+### `0.2.5` — 2026-09-02 — auto-bind adopted the wrong session, and the ADR said "necessarily"
 
-**O produto se auditou rodando pela segunda vez, e o achado é no texto de uma
-decisão, não no código.** Só `docs/` mudou: nenhuma linha de `hooks/` ou `lib/`,
-de propósito — a rodada do EOP estava viva, com **outra** sessão executando o
-`L219`, e é a mesma razão que no `0.2.4` adiou o conserto do `INDEX.md`.
+**The product audited itself while running for the second time, and the finding is
+in the text of a decision, not in the code.** Only `docs/` changed: not one line of
+`hooks/` or `lib/`, deliberately — the EOP round was alive, with **another** session
+executing `L219`, and it is the same reason that in `0.2.4` postponed the `INDEX.md`
+fix.
 
-O **ADR-008** afirma que a primeira parada *"é **necessariamente** a da sessão
-que armou"*, e o comentário em `hooks/loop-stop.py:167` repete. **Não é.** É a
-primeira sessão que **termina um turno** no repositório — qualquer chat já aberto
-ali serve. No EOP o loop adotou uma sessão que o dono havia aberto para triar os
-PRs do Dependabot, enquanto o `loop.sh` armava de outra. O `print` do próprio
-`armar` já dizia a verdade (`sessão: a primeira que parar`): o defeito é de
-documentação, e documentação que promete garantia inexistente é pior que silêncio.
+**ADR-008** states that the first stop *"is **necessarily** the one from the session
+that armed"*, and the comment at `hooks/loop-stop.py:167` repeats it. **It is not.**
+It is the first session that **finishes a turn** in the repository — any chat already
+open there will do. At EOP the loop adopted a session the owner had opened to triage
+Dependabot PRs, while `loop.sh` was arming from another. The `print` in `armar`
+already told the truth (`sessão: a primeira que parar`): the defect is documentation,
+and documentation that promises a guarantee that does not exist is worse than silence.
 
-**Custo medido na rodada** (é o que torna isto pendência e não curiosidade):
+**Cost measured during the round** (which is what makes this a debt and not a
+curiosity):
 
-- **18 entradas** de diário (`0153`–`0160`, `0166`–`0172`) que são mensagens sobre
-  PRs e sobre um artifact, arquivadas sob `L191`, `L201`, `L219` e `L220`;
-- **4 itens espúrios** na fila, colhidos de fragmentos truncados da mensagem
-  (`- [ ] a página como fonte`) — **terceira** reincidência da família que a
-  emenda do ADR-005 e o marcador nu do `0.2.4` já visitaram;
-- **duas sessões dirigidas contra a mesma árvore**, o mais caro: duas colisões de
-  `version.md` no EOP (`1.76.71` e `1.76.72`, a segunda no commit que consertava a
-  primeira), duas `master` vermelhas na guarda `G2` do repo alvo, e dois commits
-  que anunciaram trabalho que o diff não continha.
+- **18 journal entries** (`0153`–`0160`, `0166`–`0172`) that are messages about PRs
+  and about an artifact, filed under `L191`, `L201`, `L219` and `L220`;
+- **4 spurious queue items**, harvested from truncated fragments of the message
+  (`- [ ] a página como fonte`) — the **third** recurrence of the family the ADR-005
+  amendment and the bare marker of `0.2.4` had already visited;
+- **two sessions driven against the same tree**, the most expensive of all: two
+  `version.md` collisions at EOP (`1.76.71` and `1.76.72`, the second in the commit
+  that was fixing the first), two red `master` runs on the target repo's `G2` guard,
+  and two commits that announced work the diff did not contain.
 
-**Entregue:** a **P-09** com o contraexemplo, o custo e três saídas a avaliar
-(recusar `armar` sem `--sessao` quando `bind_session: true`; marcador do processo
-que armou, conferido pelo hook e retrocompatível quando ausente; lock de árvore
-que faça a segunda sessão RECUSAR item em vez de competir). E o ADR-008 ganha a
-ressalva onde a afirmação vive — a decisão continua de pé, o que cai é a garantia.
+**Delivered:** **P-09** with the counterexample, the cost and three exits to evaluate
+(refuse `armar` without `--sessao` when `bind_session: true`; a marker for the arming
+process, checked by the hook and backward-compatible when absent; a tree lock that
+makes the second session REFUSE an item instead of competing for it). And ADR-008
+gets the caveat where the claim lives — the decision still stands, what falls is the
+guarantee.
 
-**Testes: 188, sem mudança** — nada de comportamento mudou, e isso é o ponto.
+**Tests: 188, unchanged** — no behaviour changed, and that is the point.
 
-### `0.2.5` — 2026-08-17 — a rodada que nasce morta, e o reabastecimento promovido
+### `0.2.5` — 2026-08-17 — the round that is born dead, and the refill promoted
 
-A rodada de 22 paradas do EOP encerrou por `fila zerada` às 16:30 — **corretamente,
-e com veredito escrito**. O que veio depois é que estava errado: três `armar` sobre
-a fila já 66/66 produziram as paradas `#20`, `#21` e `#22`, cada uma durando **uma**
-parada com horas de relógio sobrando, e cada uma injetando o relatório de
-encerramento no turno de quem estava fazendo outra coisa. Foi o que o agente do EOP
-nomeou como *"instrução de parada injetada em contexto errado"*.
+EOP's 22-stop round ended by `fila zerada` at 16:30 — **correctly, and with a
+verdict written**. What came afterwards is what was wrong: three `armar` calls over
+an already 66/66 queue produced stops `#20`, `#21` and `#22`, each lasting **one**
+stop with hours left on the clock, and each injecting the shutdown report into the
+turn of whoever was doing something else. That is what the EOP agent named *"a stop
+instruction injected into the wrong context"*.
 
-#### Armar sem pendente vira erro, não aviso
+#### Arming with nothing pending becomes an error, not a warning
 
-- `armar` e `retomar` **recusam** fila sem nenhum `- [ ]` (`--mesmo-sem-fila`
-  força). O aviso já existia hoje de manhã e não impediu **nenhuma** das três:
-  texto impresso depois de o estado estar gravado não é guarda-corpo.
-- A recusa não deixa efeito atrás: o `armar` apagava o `.loop/STOP` **antes** das
-  guardas, então um comando que abortava já tinha desarmado o kill-switch — a única
-  trava que o dono aciona sem terminal na sessão.
+- `armar` and `retomar` **refuse** a queue with no `- [ ]` at all (`--mesmo-sem-fila`
+  forces it). The warning already existed that morning and stopped **none** of the
+  three: text printed after the state is written is not a guardrail.
+- The refusal leaves no effect behind: `armar` used to delete `.loop/STOP` **before**
+  the guards, so a command that aborted had already disarmed the kill switch — the
+  one lever the owner pulls without a terminal in the session.
 
-#### Rodada que nasceu morta encerra calada
+#### A round born dead ends quietly
 
-- `pendentes_ao_armar` (campo novo, aditivo) grava quantos itens havia a fazer na
-  hora de armar. Zero + primeira parada + zero pendente agora = **nada aconteceu**:
-  o hook encerra com `systemMessage` e **não** emite o relatório. `None` (estado de
-  versão anterior) relata como antes — "não sei" nunca vale zero.
-- O predicado começou como `iteracao == 1 and feitos == feitos_ao_armar` e a suíte
-  cobrou: silenciava encerramento **legítimo** na primeira parada (política
-  ASK=parar, `--itens 1`), onde houve rodada e o relatório é o certo. Medir o fato
-  no `armar` substituiu a inferência por dois contadores que podiam coincidir.
-- Registro inalterado: `STATUS.md`, entry e `INDEX.md` continuam escritos.
+- `pendentes_ao_armar` (new, additive field) records how many items there were to do
+  at arming time. Zero + first stop + zero pending now means **nothing happened**:
+  the hook ends with a `systemMessage` and does **not** emit the report. `None`
+  (state from an earlier version) reports as before — "I don't know" is never worth
+  zero.
+- The predicate started as `iteracao == 1 and feitos == feitos_ao_armar` and the
+  suite charged for it: it silenced a **legitimate** ending on the first stop
+  (ASK=stop policy, `--itens 1`), where there was a round and the report is the right
+  thing. Measuring the fact at `armar` replaced the inference by two counters that
+  could coincide.
+- The record is unchanged: `STATUS.md`, entry and `INDEX.md` are still written.
 
-#### Leitura de registro não pode matar quem lê
+#### Reading the record must not kill the reader
 
-O painel morreu com traceback às **16:39:57**, no refresh seguinte a uma tela que
-renderizou certo 30 s antes: leu uma entry no meio da gravação e
-`UnicodeDecodeError` — que é `ValueError` — passou por baixo do
+The dashboard died with a traceback at **16:39:57**, on the refresh after a screen
+that had rendered correctly 30 s earlier: it read an entry mid-write and
+`UnicodeDecodeError` — which is a `ValueError` — slipped underneath
 `except (IOError, OSError)`.
 
-- `errors="replace"` nas leituras de registro: entries e `STATUS.md` no painel,
-  `QUEUE.md` no motor. A entry estragada **continua na tela**, com o byte ruim como
-  U+FFFD; sobreviver escondendo a parada seria o mesmo painel mentiroso por outro
-  caminho — e foi assim que a primeira versão do teste passou com o controle
-  desligado (a mutação derrubou 0 testes, e o teste foi refeito).
-- Na fila isso é mais que cosmético: quem escreve o `QUEUE.md` é o **agente**, e o
-  hook a lê no instante do `Stop` — a janela é o turno de reabastecimento. A
-  exceção seria engolida pelo fail-open e a parada se perderia **em silêncio**,
-  justamente na volta em que a fila cresceu.
-- E a colheita deixou de gravar esqueleto por cima de fila ilegível: ela lê o
-  `QUEUE.md` para **reescrevê-lo**, e o fallback `"# Fila do loop\n"` valia para
-  qualquer falha de leitura — com o arquivo existindo, isso apagava o contrato do
-  ciclo. Agora esqueleto só quando não há arquivo; qualquer outra falha desiste da
-  colheita, que é acessória.
+- `errors="replace"` on record reads: entries and `STATUS.md` in the dashboard,
+  `QUEUE.md` in the engine. The damaged entry **stays on screen**, with the bad byte
+  as U+FFFD; surviving by hiding the stop would be the same lying dashboard by
+  another route — and that is how the first version of the test passed with the
+  control turned off (the mutation dropped 0 tests, and the test was rewritten).
+- In the queue this is more than cosmetic: `QUEUE.md` is written by the **agent**,
+  and the hook reads it at the instant of the `Stop` — the window is the refill turn.
+  The exception would be swallowed by the fail-open and the stop would be lost **in
+  silence**, precisely on the round where the queue grew.
+- And harvesting stopped writing a skeleton over an unreadable queue: it reads
+  `QUEUE.md` in order to **rewrite it**, and the `"# Fila do loop\n"` fallback applied
+  to any read failure — with the file present, that erased the cycle's contract. Now
+  the skeleton is only written when there is no file; any other failure gives up on
+  harvesting, which is incidental.
 
-#### O reabastecimento vira artefato do produto (ADR-014)
+#### The refill becomes a product artifact (ADR-014)
 
-O ⛔ de hoje de manhã dizia para **não** documentar o padrão antes de a rodada
-medir. A rodada mediu: **14 paradas seguidas sem encerrar** (`#6`…`#19`), **13
-reabastecimentos**, fila de **22 → 66 itens**, intervalos de 25 · 14 · 10 · 10 · 7
-min. E o achado que mudou o desenho: na 10ª volta o agente **quebrou a cláusula de
-reposição de propósito**, com as sete hipóteses tabeladas (três viraram bloco, três
-mediram zero), porque *"cumpri-la sem insumo obriga a fabricar bloco"*.
+That morning's ⛔ said **not** to document the pattern before a round measured it.
+The round measured it: **14 consecutive stops without ending** (`#6`…`#19`), **13
+refills**, queue from **22 → 66 items**, intervals of 25 · 14 · 10 · 10 · 7 min. And
+the finding that changed the design: on the 10th lap the agent **broke the
+replenishment clause deliberately**, with the seven hypotheses tabulated (three
+became blocks, three measured zero), because *"complying with it without input forces
+you to fabricate a block"*.
 
-- [prompts/reabastecer.md](prompts/reabastecer.md) — o item canônico, com as duas
-  cláusulas normativas: **escopo declarado** (com o que "para e pergunta") e
-  **escape da reposição**.
-- `SKILL.md` §1.1, `SPEC.md` §5.2, ADR-014, e o `armar` apontando para o arquivo
-  quando recusa fila vazia.
-- Fica dito o que isso **não** é: automático. A promessa de horas depende de alguém
-  colar o item na fila — é decisão, não esquecimento.
-- ⛔ Segue sem medição se a fila escrita pelo próprio loop **deriva** ao longo de
-  muitas voltas (P-05). Contar as 44 linhas novas não responde; ler o que elas
-  produziram, sim.
+- [prompts/reabastecer.md](prompts/reabastecer.md) — the canonical item, with the two
+  normative clauses: **declared scope** (including what "stops and asks") and
+  **replenishment escape**.
+- `SKILL.md` §1.1, `SPEC.md` §5.2, ADR-014, and `armar` pointing at the file when it
+  refuses an empty queue.
+- It is stated what this is **not**: automatic. The promise of hours depends on
+  someone pasting the item into the queue — that is a decision, not forgetfulness.
+- ⛔ Still unmeasured: whether a queue written by the loop itself **drifts** over many
+  laps (P-05). Counting the 44 new lines does not answer that; reading what they
+  produced does.
 
-**Testes: 184 → 200.** Mutação de cada controle:
+**Tests: 184 → 200.** Mutation of each control:
 
-| Controle desligado | Testes que caem |
+| Control turned off | Tests that fall |
 |---|---|
-| `armar`/`retomar` voltam a avisar em vez de recusar | 3 |
-| recusa volta a apagar o kill-switch antes de abortar | 1 |
-| rodada que nasceu morta volta a emitir o rito | 1 |
-| predicado largo (qualquer 1ª parada fica calada) | 8 |
-| `pendentes_ao_armar` deixa de ser gravado | 1 |
-| painel volta a morrer com byte inválido na entry | 1 |
-| contagem da fila volta a estourar com byte inválido | 1 |
-| colheita volta a gravar esqueleto por cima da fila ilegível | 1 |
+| `armar`/`retomar` go back to warning instead of refusing | 3 |
+| the refusal goes back to deleting the kill switch before aborting | 1 |
+| a round born dead goes back to emitting the rite | 1 |
+| broad predicate (any 1st stop stays quiet) | 8 |
+| `pendentes_ao_armar` stops being recorded | 1 |
+| the dashboard goes back to dying on an invalid byte in an entry | 1 |
+| the queue count goes back to blowing up on an invalid byte | 1 |
+| harvesting goes back to writing a skeleton over an unreadable queue | 1 |
 
-**A mutação pendente do `0.2.4` foi medida** — a rodada do EOP encerrou e o
-`classificador.py` parou de ser editado, então mutar-e-restaurar deixou de arriscar
-o trabalho de outro. Cada marcador voltando a ser nu (`\s*:` → `\b`):
+**The pending mutation from `0.2.4` was measured** — the EOP round ended and
+`classificador.py` stopped being edited, so mutate-and-restore no longer risked
+someone else's work. Each marker going back to bare (`\s*:` → `\b`):
 
-| Marcador que volta a ser nu | Testes que caem |
+| Marker back to bare | Tests that fall |
 |---|---|
 | `próxima rodada` | 2 |
 | `próximo ciclo` | 1 |
 | `não coberto` | 2 |
-| os três juntos | 3 |
+| all three together | 3 |
 
-Os três juntos derrubam **menos** que a soma: os testes de regressão do `0.2.4`
-usam prosa real e uma frase pode casar com mais de um marcador, então a mesma
-asserção cai por qualquer um deles. O que importa é que **nenhum** dos três está
-sem teste — era exatamente o que o ⛔ deixava em aberto.
+All three together drop **fewer** than the sum: the `0.2.4` regression tests use real
+prose and one sentence can match more than one marker, so the same assertion falls to
+any of them. What matters is that **none** of the three is untested — which is exactly
+what the ⛔ had left open.
 
-### `0.2.4` — 2026-08-17 — o marcador nu, e quando cada parada foi
+### `0.2.4` — 2026-08-17 — the bare marker, and when each stop happened
 
-> Duas entregas na mesma árvore, e o registro diz de quem é cada uma: o conserto
-> do classificador foi feito **pelo agente do EOP**, dentro da rodada de loop, e
-> o painel por esta sessão. Estão num commit só porque assim aconteceram.
+> Two deliveries in the same tree, and the record says whose each one is: the
+> classifier fix was made **by the EOP agent**, inside the loop round, and the
+> dashboard by this session. They are in a single commit only because that is how
+> they happened.
 
-#### O classificador colhia prosa — achado em operação, pelo próprio loop
+#### The classifier was harvesting prose — found in operation, by the loop itself
 
-Primeira vez que o produto se auditou **rodando**. A colheita errou três vezes na
-rodada de 17/08; na terceira reproduziu de primeira, e a causa não era falta de
-teste — a suíte já tinha nove asserções negativas dedicadas a não colher prosa. A
-causa era a **forma do padrão**.
+The first time the product audited itself **while running**. Harvesting got it wrong
+three times in the round of 17/08; on the third it reproduced on the first try, and
+the cause was not a missing test — the suite already had nine negative assertions
+dedicated to not harvesting prose. The cause was the **shape of the pattern**.
 
-- **Marcador nu** — sintagma sem verbo de adiamento — casa narrativa. *"a tabela
-  ficou no QUEUE.md para a próxima rodada não repetir a varredura"* fala sobre
-  para que serve um registro, e virou item de fila. Agravante: como o
-  `colher_declarados` pega a primeira frase do parágrafo quando não há lista, **o
-  item que nascia nem era a frase que casou**.
-- A varredura das cinco listas achou **três** nus na que alimenta a fila:
-  `próxima rodada`, `próximo ciclo` e `não coberto` — o terceiro descoberto ao
-  consertar os dois primeiros, e confirmado com prosa real antes da mudança
-  (*"esse caminho ficou não coberto pela imutabilidade do banco"*). Os outros
-  doze padrões carregam verbo e nunca morderam.
-- Os três passam a exigir `\s*:`. Com dois-pontos a expressão **anuncia** itens,
-  que é o único uso que o colhedor sabe ler.
-- **Catraca meta:** um teste varre `DECLARADO_PENDENTE` inteira e reprova
-  marcador que não tenha verbo de adiamento nem exija `:` — com prova de execução
-  nos dois sentidos, para a catraca não absolver por engano.
+- **Bare marker** — a phrase with no deferral verb — matches narrative. *"the table
+  stayed in QUEUE.md so the next round would not repeat the sweep"* talks about what a
+  record is for, and became a queue item. Aggravating factor: since
+  `colher_declarados` takes the first sentence of the paragraph when there is no list,
+  **the item that was born was not even the sentence that matched**.
+- Sweeping the five lists found **three** bare ones in the list that feeds the queue:
+  `próxima rodada`, `próximo ciclo` and `não coberto` — the third discovered while
+  fixing the first two, and confirmed against real prose before the change (*"that path
+  ended up not covered by the database's immutability"*). The other twelve patterns
+  carry a verb and never bit.
+- The three now require `\s*:`. With a colon the expression **announces** items, which
+  is the only use the harvester knows how to read.
+- **Meta ratchet:** a test sweeps the whole of `DECLARADO_PENDENTE` and fails any
+  marker that has neither a deferral verb nor a required `:` — with proof of execution
+  in both directions, so the ratchet cannot acquit by accident.
 
-#### O painel: quando cada parada foi, e quanto tempo levou
+#### The dashboard: when each stop happened, and how long it took
 
-Pedido do Samir durante a terceira rodada, e o defeito é o mesmo que o enganou de
-manhã: o painel mostrou `09:32 · 09:03 · 21:19 · 20:24` nas últimas paradas, e as
-duas de baixo eram do **dia anterior** — nada na tela dizia isso. Num registro
-que atravessa a meia-noite, `hh:mm` sozinho engana com cara de dado.
+Requested by Samir during the third round, and the defect is the same one that misled
+him that morning: the dashboard showed `09:32 · 09:03 · 21:19 · 20:24` for the last
+stops, and the bottom two were from the **previous day** — nothing on screen said so.
+In a record that crosses midnight, `hh:mm` alone misleads while looking like data.
 
-- **`Últimas paradas` carrega `DD/MM/YYYY-hh:mm`** (`carimbo()`). Carimbo que não
-  casa com o formato ISO devolve o texto cru truncado em vez de data inventada —
-  o painel pode não saber ler um carimbo, não pode fabricar um.
-- **O cabeçalho ganha a data** pelo `--uma-vez >> registro.log`: num arquivo que
-  acumula por dias, `12:57:11` sozinho não diz de quando é.
-- **Cada parada mostra o intervalo desde a anterior** (`+12min`). A data responde
-  *quando*; o intervalo responde *quanto tempo levou* — e era a informação que o
-  painel nunca teve, não a que a data substituiu. É também o "trabalho por
-  iteração" que a P-05 pede e que nenhuma rodada tinha medido.
-  `ultimas_paradas` passa a ler **uma parada a mais** do que exibe: o intervalo
-  da linha mais antiga da tela depende da anterior a ela, que já saiu da janela.
-- O intervalo é rotulado como **fato medido, não tempo de trabalho**: entre a
-  `#5` e a `#6` de 17/08 há meia hora em que o loop estava encerrado esperando um
-  `retomar`. O painel mede o relógio; inferir produtividade dali é de quem lê.
+- **`Últimas paradas` carries `DD/MM/YYYY-hh:mm`** (`carimbo()`). A timestamp that does
+  not match the ISO format returns the raw text truncated instead of an invented date —
+  the dashboard may fail to read a timestamp, it may not fabricate one.
+- **The header gains the date** because of `--uma-vez >> registro.log`: in a file that
+  accumulates over days, `12:57:11` alone does not say when it is from.
+- **Each stop shows the interval since the previous one** (`+12min`). The date answers
+  *when*; the interval answers *how long it took* — and that was the information the
+  dashboard never had, not the one the date replaced. It is also the "work per
+  iteration" P-05 asks for and that no round had measured. `ultimas_paradas` now reads
+  **one stop more** than it displays: the interval of the oldest line on screen depends
+  on the one before it, which has already left the window.
+- The interval is labelled a **measured fact, not working time**: between `#5` and `#6`
+  on 17/08 there is half an hour in which the loop was ended, waiting for a `retomar`.
+  The dashboard measures the clock; inferring productivity from it is on the reader.
 
-Mudança só em `loop_watch.py` — leitura pura, fora do caminho do hook — porque a
-rodada do EOP estava **rodando** na hora, e o hook roda do symlink: erro em
-`lib/` ou no hook faria ele sair fail-open e travaria a rodada no meio.
+Change only in `loop_watch.py` — pure reading, off the hook's path — because the EOP
+round was **running** at the time, and the hook runs from the symlink: an error in
+`lib/` or in the hook would make it exit fail-open and strand the round mid-way.
 
-**Testes: 172 → 184.** Seis do painel, seis do classificador (quatro de
-regressão, dois por marcador nos dois sentidos, mais a catraca meta e a prova de
-execução dela).
+**Tests: 172 → 184.** Six for the dashboard, six for the classifier (four regression,
+two per marker in both directions, plus the meta ratchet and the proof it executes).
 
-| Controle desligado | Testes que caem |
+| Control turned off | Tests that fall |
 |---|---|
-| painel deixa de calcular o intervalo entre paradas | 2 |
-| carimbo volta a ser só `hh:mm` (`ts[11:16]`) | 1 |
-| não lê a parada extra — linha mais antiga fica sem intervalo | 1 |
-| marcador volta a ser nu (sem `\s*:`) | ⛔ **não medido** |
+| the dashboard stops computing the interval between stops | 2 |
+| the timestamp goes back to just `hh:mm` (`ts[11:16]`) | 1 |
+| it does not read the extra stop — the oldest line has no interval | 1 |
+| the marker goes back to bare (no `\s*:`) | ⛔ **not measured** |
 
-⛔ A mutação dos três marcadores **não foi rodada**: o agente do EOP estava
-editando `classificador.py` no mesmo minuto, e mutar-e-restaurar teria apagado o
-que ele gravasse no meio. A catraca meta cobre a **forma** do padrão; falta o
-número de testes que cada marcador derruba. Rodar quando a rodada encerrar.
+⛔ The mutation of the three markers **was not run**: the EOP agent was editing
+`classificador.py` in that same minute, and mutate-and-restore would have erased
+whatever it wrote in between. The meta ratchet covers the **shape** of the pattern;
+what is missing is the number of tests each marker drops. Run it when the round ends.
 
-⛔ **Falta o mesmo conserto no `INDEX.md`**, que é o registro durável e hoje não
-tem timestamp **nenhum** — nem hora. Adiado de propósito: mexe em
-`estado.py::indexar`, que o hook consome, e a rodada estava viva.
+⛔ **The same fix is missing in `INDEX.md`**, which is the durable record and today has
+**no** timestamp at all — not even a time. Postponed deliberately: it touches
+`estado.py::indexar`, which the hook consumes, and the round was alive.
 
-### `0.2.3` — 2026-08-17 — a pergunta não era item, e o painel não era testemunha
+### `0.2.3` — 2026-08-17 — the question was not an item, and the dashboard was not a witness
 
-Um painel do EOP lido às 09:42 sobre uma rodada morta às 09:32. Quatro coisas
-erradas nele, e a pior não era de exibição.
+An EOP dashboard read at 09:42 about a round that died at 09:32. Four things wrong in
+it, and the worst was not a display problem.
 
-- **A pergunta virava item de fila — e foi ela que encerrou a rodada.** O fecho
-  da parada `#0003` era *"**Pergunta:** sigo com esse discriminador…"*: `\bsigo
-  (?:com|por|para|pra)\b` é HANDOFF, o parágrafo tem `:`, e a colheita levou o que
-  vinha depois do último `:` para o `QUEUE.md` — com o `**` do negrito partido na
-  frente. Marcada `- [x]`, ela zerou os pendentes e disparou *"fila zerada"*: uma
-  condição de fim correta disparando sobre uma contagem que não devia existir.
-  Agora candidato que **seja** ou **contenha** pergunta detectada é descartado,
-  nas três zonas e **nos dois vereditos** — o ADR-005 continua de pé, porque o que
-  muda não é *quando* se colhe, é *o quê* (emenda ao ADR-005).
-- **O painel voltou a consumir a cadeia, em vez de manter a sua.** O `0.2.2`
-  tirou a lista de condições do hook e deixou a do `loop-watch` de lado: sem
-  kill-switch, sem sem-progresso, ordenada por tempo restante. Numa rodada
-  **já encerrada por fila zerada**, ele marcava `← primeira` na janela — faltando
-  2h18 — com *"fila zerada, 0 pendente(s)"* impressa duas linhas abaixo. Era a
-  quarta cópia que o `diagnostico.py` foi escrito para impedir. A marca agora
-  responde qual das três perguntas cabe: `← encerrou aqui` (fato gravado),
-  `← já bateu: a próxima parada encerra` (aviso, numa rodada viva), `← primeira`
-  (relógio — só quando nenhuma bateu). Emenda ao ADR-013.
-- **O número da parada vem do nome do arquivo.** O painel lia o `n:` do
-  front-matter, que até hoje de manhã era a iteração — e `armar` zera a iteração a
-  cada rodada. Quatro paradas gravadas como `0001`..`0004` apareciam como
-  `#4 #1 #2 #1`. Régua única em `estado.NUM_DE_ENTRY`, para quem escreve e para
-  quem lê.
-- **Objetivo ilegível é recusado também na saída.** A guarda de `armar` nasceu no
-  `0.2.2`, depois de o `.loop/` do EOP já estar armado com `"¨¨"` — e estado
-  gravado antes de uma guarda não passa a obedecê-la. O painel anunciou o mojibake
-  por rodada inteira. Porta e vitrine agora medem com a mesma função
-  (`estado.objetivo_legivel`), e a exibição diz **o que** há de errado e **com
-  quê** consertar, em vez de trocar o lixo por um `—` que se confundiria com
-  "não declarou objetivo".
-- **`encerrado_detalhe` no `STATE.json`** (campo aditivo): o detalhe morava só no
-  `STATUS.md`, em prosa. É ele que separa duas condições que dividem o mesmo
-  motivo — `escopo concluído` por N itens × por marcador — e o que responde
-  "zerada com quantos?" sem abrir outro arquivo.
-- O cabeçalho do painel diz **há quanto tempo** encerrou: ele carimba a hora da
-  *leitura*, e 09:42 sobre uma rodada morta às 09:32 parecia rodada de agora.
+- **The question was becoming a queue item — and it was what ended the round.** The
+  closing of stop `#0003` was *"**Pergunta:** sigo com esse discriminador…"*: `\bsigo
+  (?:com|por|para|pra)\b` is HANDOFF, the paragraph has a `:`, and harvesting took what
+  came after the last `:` into `QUEUE.md` — with the bold `**` broken off in front.
+  Marked `- [x]`, it zeroed the pending count and triggered *"fila zerada"*: a correct
+  end condition firing over a count that should not have existed. Now a candidate that
+  **is** or **contains** a detected question is discarded, in all three zones and **in
+  both verdicts** — ADR-005 still stands, because what changes is not *when* you
+  harvest, it is *what* (amendment to ADR-005).
+- **The dashboard went back to consuming the chain instead of keeping its own.**
+  `0.2.2` took the condition list out of the hook and left `loop-watch`'s own aside: no
+  kill switch, no no-progress, ordered by time remaining. On a round **already ended by
+  an empty queue**, it marked `← primeira` on the window — with 2h18 left — with
+  *"fila zerada, 0 pendente(s)"* printed two lines below. It was the fourth copy
+  `diagnostico.py` had been written to prevent. The mark now answers whichever of the
+  three questions applies: `← encerrou aqui` (recorded fact), `← já bateu: a próxima
+  parada encerra` (a warning, on a live round), `← primeira` (clock — only when none
+  has hit). Amendment to ADR-013.
+- **The stop number comes from the file name.** The dashboard read `n:` from the
+  front-matter, which until that morning was the iteration — and `armar` resets the
+  iteration on every round. Four stops recorded as `0001`..`0004` showed up as
+  `#4 #1 #2 #1`. A single ruler in `estado.NUM_DE_ENTRY`, for whoever writes and
+  whoever reads.
+- **An unreadable objective is refused on the way out too.** The `armar` guard was born
+  in `0.2.2`, after EOP's `.loop/` was already armed with `"¨¨"` — and state written
+  before a guard does not start obeying it afterwards. The dashboard announced the
+  mojibake for a whole round. Door and shop window now measure with the same function
+  (`estado.objetivo_legivel`), and the display says **what** is wrong and **with what**
+  to fix it, instead of swapping the garbage for a `—` that would be confused with "did
+  not declare an objective".
+- **`encerrado_detalhe` in `STATE.json`** (additive field): the detail lived only in
+  `STATUS.md`, in prose. It is what separates two conditions that share the same reason
+  — `escopo concluído` by N items × by marker — and what answers "zeroed with how many?"
+  without opening another file.
+- The dashboard header says **how long ago** it ended: it stamps the time of the
+  *reading*, and 09:42 over a round dead at 09:32 looked like a round happening now.
 
-**16 testes novos** (10 em `test_watch.py`, 6 em `test_classificador.py`, 1 em
+**16 new tests** (10 in `test_watch.py`, 6 in `test_classificador.py`, 1 in
 `test_ciclo.py`), total **171**.
 
-| Controle desligado | Testes que caem |
+| Control turned off | Tests that fall |
 |---|---|
-| painel volta a ranquear por relógio (ignora `encerrado_por`) | 3 |
-| pergunta volta a virar item de fila | 2 |
-| `quem_encerra` não consulta `condicoes_de_fim` | 2 |
-| painel volta a ler o `n:` do front-matter | 1 |
-| objetivo ilegível passa na régua (porta e vitrine) | 1 |
-| `_linha_do_motivo` ignora o detalhe (escopo ambíguo) | 1 |
-| hook para de gravar `encerrado_detalhe` | 1 |
-| `_dedup` sem tirar marcação solta das pontas | 1 |
+| the dashboard goes back to ranking by clock (ignores `encerrado_por`) | 3 |
+| a question goes back to becoming a queue item | 2 |
+| `quem_encerra` does not consult `condicoes_de_fim` | 2 |
+| the dashboard goes back to reading `n:` from the front-matter | 1 |
+| an unreadable objective passes the ruler (door and shop window) | 1 |
+| `_linha_do_motivo` ignores the detail (ambiguous scope) | 1 |
+| the hook stops recording `encerrado_detalhe` | 1 |
+| `_dedup` without stripping loose markup from the ends | 1 |
 
-**Medição que a rodada rendeu (P-05):** duas rodadas reais no EOP, **as duas**
-encerradas por `fila zerada` — nenhuma bateu em janela, relógio, teto ou
-sem-progresso. E a de 17/08 zerou por item espúrio: das suas 2 iterações,
-**zero** itens reais da fila foram fechados. Duas rodadas não são distribuição,
-mas a leitura preliminar é que a fila acaba antes de tudo o mais.
+**Measurement this round yielded (P-05):** two real rounds at EOP, **both** ended by
+`fila zerada` — none hit a window, clock, ceiling or no-progress. And the one on 17/08
+zeroed on a spurious item: of its 2 iterations, **zero** real queue items were closed.
+Two rounds are not a distribution, but the preliminary reading is that the queue runs
+out before anything else does.
 
-### `0.2.2` — 2026-08-17 — o fail-open era mudo: `loop-ctl porque`
+### `0.2.2` — 2026-08-17 — the fail-open was mute: `loop-ctl porque`
 
-Hoje o "continua" digitado no EOP não continuou, e a investigação à mão levou uma
-manhã. O hook estava certo: `ativo: false` desde 16/08 às 21:19, e ele sai no
-primeiro portão com `exit 0` sem escrever nada (ADR-009). **Havia três portões
-fechados no mesmo `.loop/`** e nenhuma linha de log sobre nenhum: o `ativo`, o
-`session_id` da sessão de ontem, e o relógio de 2 h estourado. O defeito não é o
-portão — é não haver como perguntar (ADR-013).
+Today the "continue" typed at EOP did not continue, and investigating it by hand took a
+morning. The hook was right: `ativo: false` since 16/08 at 21:19, and it exits at the
+first gate with `exit 0` writing nothing (ADR-009). **There were three closed gates in
+the same `.loop/`** and not one line of log about any of them: `ativo`, the previous
+day's `session_id`, and a blown 2 h clock. The defect is not the gate — it is that
+there is no way to ask (ADR-013).
 
-- **`loop-ctl porque`** percorre os portões na ordem em que o hook os testa —
-  hook instalado, `.loop/`, `ativo`, `fase`, amarração à sessão — para no
-  primeiro que barra, e segue para as condições de fim quando nenhum barra. Sai
-  `1` quando algo barra, `0` quando o loop continuaria. Alias: `diagnostico`.
-- **A cadeia de condições de fim passa a ter uma cópia só**
-  (`lib/diagnostico.py::condicoes_de_fim`), consumida pelo hook em vez da própria
-  cadeia `if/elif`. A lista já vivia em três lugares; uma quarta apodreceria, e
-  diagnóstico que mente sobre a ordem é pior que nenhum.
-- **`retomar` re-amarra a sessão** (emenda do ADR-008): limpa o `session_id`, a
-  menos que `--sessao` venha explícito. Quem retoma retoma no dia seguinte, em
-  sessão nova — e o id preservado fazia o hook sair em silêncio no portão da
-  sessão. `retomar` também avisa quando a fila está vazia ou o relógio estourou,
-  os dois fatos que reativar **não** conserta (relógio pede `armar`).
-- **O painel do `loop-watch` diz "hook inerte"** quando o loop está parado, com
-  a linha da sessão amarrada. "PARADO" era lido como "entre duas iterações".
-- `--raiz` passa a valer **antes ou depois** do subcomando: a ordem natural era
-  erro de uso, justamente no comando que socorre quem está no escuro.
+- **`loop-ctl porque`** walks the gates in the order the hook tests them — hook
+  installed, `.loop/`, `ativo`, `fase`, session binding — stops at the first that
+  blocks, and moves on to the end conditions when none does. Exits `1` when something
+  blocks, `0` when the loop would continue. Alias: `diagnostico`.
+- **The chain of end conditions now has a single copy**
+  (`lib/diagnostico.py::condicoes_de_fim`), consumed by the hook instead of its own
+  `if/elif` chain. The list already lived in three places; a fourth would rot, and a
+  diagnostic that lies about the order is worse than none.
+- **`retomar` re-binds the session** (amendment to ADR-008): it clears `session_id`
+  unless `--sessao` is given explicitly. Whoever resumes resumes the next day, in a new
+  session — and the preserved id made the hook exit silently at the session gate.
+  `retomar` also warns when the queue is empty or the clock has blown, the two facts
+  that reactivating does **not** fix (the clock calls for `armar`).
+- **The `loop-watch` dashboard says "hook inerte"** when the loop is stopped, with the
+  bound-session line. "PARADO" was being read as "between two iterations".
+- `--raiz` now works **before or after** the subcommand: the natural order was a usage
+  error, precisely in the command that rescues whoever is in the dark.
 
-**54 testes novos** (49 em `tests/test_diagnostico.py`, 5 em `test_watch.py`),
-total **155**. Entre eles o que impede o espelho de desalinhar: cada estado que faz o
-hook calar vai ao hook (subprocesso) **e** ao diagnóstico, e o silêncio de um tem
-de corresponder ao portão nomeado pelo outro.
+**54 new tests** (49 in `tests/test_diagnostico.py`, 5 in `test_watch.py`), total
+**155**. Among them the one that keeps the mirror from drifting: every state that makes
+the hook go quiet is sent to the hook (subprocess) **and** to the diagnostic, and one's
+silence must correspond to the gate the other names.
 
-Mutação de cada controle novo, com o número de testes que cada uma derruba:
+Mutation of each new control, with the number of tests each one drops:
 
-| Controle desligado | Testes que caem |
+| Control turned off | Tests that fall |
 |---|---|
-| `retomar` volta a preservar o `session_id` | 1 |
-| painel sem o aviso de hook inerte | 2 |
-| painel sem a linha da sessão amarrada | 1 |
-| portão `ativo` informa em vez de barrar | 4 |
-| portão da sessão não barra | 3 |
-| settings ilegível vira veredito de hook ausente | 3 |
-| kill-switch deixa de vir primeiro na cadeia | 5 |
-| `condicoes_de_fim` reconta a fila em vez de usar a contagem recebida | 1 |
-| avisos de rearme (fila vazia, relógio) desligados | 3 |
-| `--raiz` volta a valer só antes do subcomando | 1 |
+| `retomar` goes back to preserving `session_id` | 1 |
+| dashboard without the inert-hook warning | 2 |
+| dashboard without the bound-session line | 1 |
+| the `ativo` gate informs instead of blocking | 4 |
+| the session gate does not block | 3 |
+| unreadable settings become a verdict of "hook absent" | 3 |
+| the kill switch stops coming first in the chain | 5 |
+| `condicoes_de_fim` recounts the queue instead of using the count it received | 1 |
+| re-arm warnings (empty queue, clock) turned off | 3 |
+| `--raiz` goes back to working only before the subcommand | 1 |
 
-### `0.2.1` — 2026-08-16 — `loop-watch`: acompanhar de longe
+### `0.2.1` — 2026-08-16 — `loop-watch`: following from a distance
 
-`watch -n 30 loop_ctl.py status` re-renderiza a mesma tela e **não responde as
-duas perguntas de quem está longe do monitor**: *andou?* e *quanto falta?*.
+`watch -n 30 loop_ctl.py status` re-renders the same screen and **does not answer the
+two questions of someone away from the monitor**: *did it move?* and *how much is
+left?*.
 
-`skill/loop/loop_watch.py` responde as duas:
+`skill/loop/loop_watch.py` answers both:
 
-- **delta entre leituras** — `+3 parada(s), +2 item(ns) fechado(s)`, ou
-  "sem mudança"; é a única coisa que uma tela repintada não dá;
-- **tempo restante de cada condição de fim**, com a que vai bater primeiro
-  marcada (`← primeira`). Para isso nasceu `minutos_ate_fechar` no motor, que
-  cruza a meia-noite e devolve `None` para janela inválida — nunca inventa
-  número;
-- barra de progresso da fila, próximo item, e as últimas paradas com
-  **ASK sinalizada** (premissa foi registrada) e **fecho parcial sinalizado**
-  (o defeito do ADR-012, visível de longe se voltar);
-- `--uma-vez` (cron/log), `--ate-encerrar` (sai com sino quando o loop para),
-  `--raiz`, `--sem-cor`. Sem cor automaticamente quando a saída não é terminal.
+- **delta between readings** — `+3 parada(s), +2 item(ns) fechado(s)`, or "sem
+  mudança"; it is the one thing a repainted screen cannot give;
+- **time remaining on each end condition**, with the one that will hit first marked
+  (`← primeira`). `minutos_ate_fechar` was born in the engine for this; it crosses
+  midnight and returns `None` for an invalid window — it never invents a number;
+- a queue progress bar, the next item, and the last stops with **ASK flagged** (an
+  assumption was recorded) and **partial closing flagged** (the ADR-012 defect, visible
+  from a distance if it comes back);
+- `--uma-vez` (cron/log), `--ate-encerrar` (exits with a bell when the loop stops),
+  `--raiz`, `--sem-cor`. Colour off automatically when the output is not a terminal.
 
-O `install.sh` passa a criar os atalhos **`loop-watch`** e **`loop-ctl`** em
-`~/.local/bin` (shim, não symlink — deixa explícito qual repositório serve), e
-avisa se o diretório não está no PATH. `--uninstall` remove os dois.
+`install.sh` now creates the **`loop-watch`** and **`loop-ctl`** shortcuts in
+`~/.local/bin` (a shim, not a symlink — it makes explicit which repository is serving),
+and warns if the directory is not on `PATH`. `--uninstall` removes both.
 
-**18 testes novos** (`tests/test_watch.py`), total **101**.
+**18 new tests** (`tests/test_watch.py`), total **101**.
 
-### `0.2.0` — 2026-08-16 — primeira rodada real, e o defeito que ela revelou
+### `0.2.0` — 2026-08-16 — the first real round, and the defect it revealed
 
-**O loop rodou em trabalho de verdade** (EOP, 20:11→21:19): armado com fila de
-21 itens e janela até 22h, fechou **21/21**, encerrou pela condição declarada
-(fila zerada), mandou o agente enviar a push notification e parou. **Duas
-paradas em 68 minutos** — uma única continuação substituiu o "continua" que
-custaria 10 minutos de tela apagada. Saldo do outro lado: 72 arquivos tocados,
-`version.md` do EOP de 1.27.11 → 1.29.0, ADR-081 escrito lá, e um
-`ASSUMPTIONS.md` registrando as três premissas com o custo de desfazer cada uma.
+**The loop ran on real work** (EOP, 20:11→21:19): armed with a 21-item queue and a
+window until 22:00, it closed **21/21**, ended by the declared condition (empty queue),
+told the agent to send the push notification and stopped. **Two stops in 68 minutes** —
+a single continuation replaced the "continue" that would have cost 10 minutes of dark
+screen. The balance on the other side: 72 files touched, EOP's `version.md` from
+1.27.11 → 1.29.0, ADR-081 written there, and an `ASSUMPTIONS.md` recording the three
+assumptions with the cost of undoing each one.
 
-**E a auditoria da rodada achou o defeito central do produto (ADR-012).** As
-duas `entries` arquivadas eram **fragmentos de meio de raciocínio**, não
-relatórios: o hook `Stop` dispara antes de o Claude Code gravar o último bloco
-de texto no JSONL. Na parada #2 ele leu às 00:19:22 um texto de **00:12:30** —
-154 entradas atrás — enquanto o relato verdadeiro era escrito naquele segundo.
-Ler o retorno e documentá-lo **é** o produto, e ele documentava a coisa errada,
-em silêncio: a decisão de continuar não depende do texto, então nada denunciava.
-O único sinal era o `confianca: media` que o classificador registrou nas duas.
+**And auditing the round found the product's central defect (ADR-012).** The two
+archived `entries` were **fragments from the middle of the reasoning**, not reports:
+the `Stop` hook fires before Claude Code writes the last text block to the JSONL. On
+stop #2 it read, at 00:19:22, a text from **00:12:30** — 154 entries earlier — while
+the true report was being written at that very second. Reading the return and
+documenting it **is** the product, and it was documenting the wrong thing, silently:
+the decision to continue does not depend on the text, so nothing gave it away. The only
+signal was the `confianca: media` the classifier recorded on both.
 
-**Conserto:** a leitura passa a responder se o texto é o **fecho do turno**
-(nada do agente principal depois dele) e **espera** até 3 s pelo fecho, relendo
-a cada 100 ms. Estourando, segue mesmo assim — mas grava `fecho_do_turno:
-PARCIAL`, derruba a confiança para `baixa` e diz na evidência que aquilo não é
-o relatório. Subagente não conta como conteúdo depois; `AskUserQuestion` fecha
-o turno por si e não gera espera.
+**Fix:** the read now answers whether the text is the **closing of the turn** (nothing
+from the main agent after it) and **waits** up to 3 s for that closing, re-reading every
+100 ms. On timeout it proceeds anyway — but records `fecho_do_turno: PARCIAL`, drops
+confidence to `baixa` and says in the evidence that this is not the report. A subagent
+does not count as content after; `AskUserQuestion` closes the turn by itself and
+generates no wait.
 
-**11 testes novos** (`tests/test_transcricao.py`), com a corrida reproduzida de
-verdade: o fecho é escrito por outra thread **durante** a espera. Total **83**.
-Mutação: desligar a espera derruba as duas regressões e devolve exatamente o
-comportamento de 16/08.
+**11 new tests** (`tests/test_transcricao.py`), with the race actually reproduced: the
+closing is written by another thread **during** the wait. Total **83**. Mutation:
+turning off the wait drops both regressions and returns exactly the behaviour of 16/08.
 
-**Ainda não feito:** a espera resolve a corrida do fecho, não mede quanto dela
-sobra em sessões maiores — o teto de 3 s é escolha, não medição (P-07).
+**Not done yet:** the wait resolves the closing race, it does not measure how much of it
+remains in larger sessions — the 3 s ceiling is a choice, not a measurement (P-07).
 
-### `0.1.0` — 2026-08-16 — F0 e F1: proposta fechada e motor determinístico
+### `0.1.0` — 2026-08-16 — F0 and F1: proposal closed and a deterministic engine
 
-Nasce a skill que faz o agente trabalhar sem "continua" a cada cinco minutos.
-Proposta fechada com o Samir na conversa de 16/08, e o núcleo entregue no mesmo
-dia — a documentação e o código saíram juntos porque o classificador só ficou de
-pé depois de calibrado contra **duas mensagens reais** do agente dele,
-publicadas anonimizadas (originais em `fixtures-reais/`, fora do git).
+The skill that makes the agent work without a "continue" every five minutes is born.
+The proposal was closed with Samir in the conversation of 16/08, and the core delivered
+the same day — documentation and code came out together because the classifier only
+stood up after being calibrated against **two real messages** from his agent, published
+anonymised (originals in `fixtures-reais/`, outside git).
 
-**Decidido** (ADR-001 a ADR-009): gatilho é hook `Stop`, não skill nem timer;
-`stop_hook_active` não serve de trava; ASK sempre continua com premissa
-registrada; classificação por **zona e direção**, não por pontuação; itens do
-fecho e pendências declaradas viram fila; `QUEUE.md` é a fonte do próximo passo;
-fail-open; auto-amarração à sessão; notificação push pelo próprio agente.
+**Decided** (ADR-001 to ADR-009): the trigger is a `Stop` hook, not a skill and not a
+timer; `stop_hook_active` is no good as a latch; ASK always continues with the
+assumption recorded; classification by **zone and direction**, not by punctuation;
+closing items and declared pending work become the queue; `QUEUE.md` is the source of
+the next step; fail-open; auto-binding to the session; push notification sent by the
+agent itself.
 
-**Entregue e testado** — 72 testes, controles verificados por mutação:
+**Delivered and tested** — 72 tests, controls verified by mutation:
 
-- `skill/loop/lib/classificador.py` — ASK × DOC por zona de fecho, supressão de
-  retórica auto-respondida, léxico de handoff PT-BR/EN, colheita de itens com
-  split ciente de parênteses, colheita de pendências declaradas.
-- `skill/loop/hooks/loop-stop.py` — o hook: classifica, arquiva, decide e
-  devolve `decision: block` com o próximo item. Fail-open em qualquer erro.
-- `skill/loop/lib/estado.py` — `.loop/` inteiro: estado, fila, entries, índice,
-  premissas, status, impressão digital de progresso.
-- `skill/loop/lib/transcricao.py` — leitura pela cauda do JSONL, filtro de
-  subagente.
-- `skill/loop/loop_ctl.py` — armar/parar/retomar/status/fila.
-- `install.sh` — hook global idempotente que convive com os hooks `Stop` já
-  instalados; `--dry-run` e `--uninstall`.
+- `skill/loop/lib/classificador.py` — ASK × DOC by closing zone, suppression of
+  self-answered rhetoric, PT-BR/EN handoff lexicon, item harvesting with
+  parenthesis-aware splitting, harvesting of declared pending work.
+- `skill/loop/hooks/loop-stop.py` — the hook: it classifies, files, decides and returns
+  `decision: block` with the next item. Fail-open on any error.
+- `skill/loop/lib/estado.py` — the whole of `.loop/`: state, queue, entries, index,
+  assumptions, status, progress fingerprint.
+- `skill/loop/lib/transcricao.py` — tail reading of the JSONL, subagent filter.
+- `skill/loop/loop_ctl.py` — arm/stop/resume/status/queue.
+- `install.sh` — an idempotent global hook that coexists with the `Stop` hooks already
+  installed; `--dry-run` and `--uninstall`.
 
-**Dois defeitos achados pelos próprios testes** antes de qualquer uso: o
-comentário de proveniência entrava na chave de dedup (item recolhido a cada
-parada) e vazava para o prompt; e encerrar com `notificar: false` deixava o loop
-ativo.
+**Two defects found by the tests themselves** before any use: the provenance comment
+was entering the dedup key (the item was re-harvested at every stop) and leaking into
+the prompt; and ending with `notificar: false` left the loop active.
 
-**Ainda não feito:** operação em trabalho real (F2) — nenhum número de campo
-existe. Ver `.continue/escopo-projeto.md`.
+**Not done yet:** operation on real work (F2) — no field number exists. See
+`.continue/escopo-projeto.md`.

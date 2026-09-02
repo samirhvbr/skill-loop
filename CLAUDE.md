@@ -89,7 +89,9 @@ apagou sinal e precisa ser refeita.
 
 ## Padrão de Commits (obrigatório)
 
-Formato: `X.Y.Z - Descrição curta em português`. A versão **sempre** vem de
+Formato: `X.Y.Z - Short description in English`. **Desde 02/09/2026 a
+mensagem de commit deste repositório é em inglês** (a regra normativa vive em
+[`version.md`](version.md) §2, que também está em inglês). A versão **sempre** vem de
 [`version.md`](version.md), bumpada **no mesmo commit**. Critério resumido:
 **Z** = entrega que muda regra/spec/prompt/léxico/guarda-corpo; **Y** = fase
 concluída, quebra de contrato do `.loop/`, ADR que muda direção; **X** = loop
