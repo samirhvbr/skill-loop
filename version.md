@@ -1,6 +1,6 @@
 # Versão — skill-LOOP
 
-**Versão atual:** `0.3.4`
+**Versão atual:** `0.3.5`
 
 > Este arquivo é a **fonte da verdade** da versão do projeto. Qualquer lugar que
 > precise exibir ou reportar a versão extrai o **primeiro número semver (`X.Y.Z`)**
@@ -60,6 +60,48 @@ da mesma entrega repetem a versão.
 ---
 
 ## 3. Changelog
+
+### `0.3.5` — 2026-09-02 — a cópia versionada ganha ferramenta, e ela é quem sabe da armadilha
+
+O `install.sh` liga um symlink por config dir do Claude Code: sempre atual, zero
+manutenção. Mas quem quer a skill **dentro** do repositório alvo — commitada,
+para o clone já vir com ela e não depender de instalação global — estava copiando
+`skill/loop/` à mão. Foi o que aconteceu hoje em **27 repositórios** (SHVIA,
+BLUE3, SSHVTERM), e a cópia à mão erra em dois lugares que não avisam.
+
+#### `vendor.sh`
+
+- `./vendor.sh <repo>...` instala ou atualiza a cópia em
+  `<repo>/.claude/skills/loop-work/`; `--dry-run` mostra antes.
+- Re-rodar **é** o update: o diretório é substituído inteiro, nunca mesclado. Um
+  arquivo de versão antiga sobrevivendo à cópia a que pertencia não teria como
+  ser notado.
+- Imprime `versão-antes -> versão-depois` por repositório, lendo o `VERSION.md`
+  que ele mesmo escreveu. Sem isso não há como saber quais das 27 cópias estão
+  velhas — foi exatamente o que faltou no `auditor`, que se instala do mesmo
+  jeito e não carimba versão nenhuma.
+- A versão sai deste `version.md` e a origem inclui o commit: a cópia diz de onde
+  veio, não só o que é.
+
+#### As duas armadilhas que ele fecha
+
+- **`prompts/` fica fora do que se copia.** `hooks/loop-stop.py` resolve os
+  templates três níveis acima de `skill/loop/`; a partir de
+  `.claude/skills/loop-work/` isso cai em `<repo>/.claude/prompts/`. Copiar só o
+  diretório do skill deixa o hook sem `continuacao.md` — e a falha é silenciosa
+  até a primeira parada. O script leva os dois arquivos junto.
+- **A cópia tem precedência sobre o symlink global** para o que o agente *lê*
+  (`SKILL.md`, `loop_ctl.py`), enquanto o hook que dirige a continuação é sempre
+  o do repositório. Depois de um bump, a cópia é a metade velha. O `VERSION.md`
+  gerado diz isso por escrito, no lugar onde alguém vai procurar.
+
+Nenhum hook é registrado por repositório, de propósito: o global já cobre todo
+repo e é inerte sem `.loop/STATE.json` ativo — registrar de novo dispararia duas
+vezes.
+
+Sem teste novo: o script não é do caminho de execução do loop (não roda no hook
+nem no `loop_ctl`), e o que ele produz é verificado pelos testes que já existem,
+rodando na cópia. **248 testes**, verdes.
 
 ### `0.3.4` — 2026-09-02 — o rearme por tempo vira arquivo no alvo
 
