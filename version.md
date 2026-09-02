@@ -1,6 +1,6 @@
 # Versão — skill-LOOP
 
-**Versão atual:** `0.2.4`
+**Versão atual:** `0.2.5`
 
 > Este arquivo é a **fonte da verdade** da versão do projeto. Qualquer lugar que
 > precise exibir ou reportar a versão extrai o **primeiro número semver (`X.Y.Z`)**
@@ -60,6 +60,41 @@ da mesma entrega repetem a versão.
 ---
 
 ## 3. Changelog
+
+### `0.2.5` — 2026-09-02 — o auto-bind adotou a sessão errada, e o ADR dizia "necessariamente"
+
+**O produto se auditou rodando pela segunda vez, e o achado é no texto de uma
+decisão, não no código.** Só `docs/` mudou: nenhuma linha de `hooks/` ou `lib/`,
+de propósito — a rodada do EOP estava viva, com **outra** sessão executando o
+`L219`, e é a mesma razão que no `0.2.4` adiou o conserto do `INDEX.md`.
+
+O **ADR-008** afirma que a primeira parada *"é **necessariamente** a da sessão
+que armou"*, e o comentário em `hooks/loop-stop.py:167` repete. **Não é.** É a
+primeira sessão que **termina um turno** no repositório — qualquer chat já aberto
+ali serve. No EOP o loop adotou uma sessão que o dono havia aberto para triar os
+PRs do Dependabot, enquanto o `loop.sh` armava de outra. O `print` do próprio
+`armar` já dizia a verdade (`sessão: a primeira que parar`): o defeito é de
+documentação, e documentação que promete garantia inexistente é pior que silêncio.
+
+**Custo medido na rodada** (é o que torna isto pendência e não curiosidade):
+
+- **18 entradas** de diário (`0153`–`0160`, `0166`–`0172`) que são mensagens sobre
+  PRs e sobre um artifact, arquivadas sob `L191`, `L201`, `L219` e `L220`;
+- **4 itens espúrios** na fila, colhidos de fragmentos truncados da mensagem
+  (`- [ ] a página como fonte`) — **terceira** reincidência da família que a
+  emenda do ADR-005 e o marcador nu do `0.2.4` já visitaram;
+- **duas sessões dirigidas contra a mesma árvore**, o mais caro: duas colisões de
+  `version.md` no EOP (`1.76.71` e `1.76.72`, a segunda no commit que consertava a
+  primeira), duas `master` vermelhas na guarda `G2` do repo alvo, e dois commits
+  que anunciaram trabalho que o diff não continha.
+
+**Entregue:** a **P-09** com o contraexemplo, o custo e três saídas a avaliar
+(recusar `armar` sem `--sessao` quando `bind_session: true`; marcador do processo
+que armou, conferido pelo hook e retrocompatível quando ausente; lock de árvore
+que faça a segunda sessão RECUSAR item em vez de competir). E o ADR-008 ganha a
+ressalva onde a afirmação vive — a decisão continua de pé, o que cai é a garantia.
+
+**Testes: 188, sem mudança** — nada de comportamento mudou, e isso é o ponto.
 
 ### `0.2.4` — 2026-08-17 — o marcador nu, e quando cada parada foi
 
