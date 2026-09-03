@@ -1,6 +1,6 @@
 # Version — skill-LOOP
 
-**Current version:** `0.3.5`
+**Current version:** `0.3.6`
 
 > This file is the **source of truth** for the project's version. Anywhere that
 > needs to display or report the version extracts the **first semver number
@@ -65,6 +65,20 @@ commits of the same delivery repeat the version.
 ---
 
 ## 3. Changelog
+
+### `0.3.6` — 2026-09-02 — Releases automaticas: o version.md da master vira tag e Release
+
+O GitHub nao deduz versao de mensagem de commit: sem tag, o numero e string no
+`git log` e `git diff` entre versoes nao existe. Entram o
+`.github/workflows/release.yml` e o `tools/release.sh`.
+
+**A regra:** o `version.md` da branch padrao **no GitHub** e o que as Releases
+**no GitHub** refletem. Checkout local nao entra na conta. Um PR nao publica
+nada; no merge, o push do `version.md` dispara o workflow e a Release vira
+aquela versao.
+
+Tag e titulo = a versao pura, sem prefixo `v`. Norma:
+[samirhvbr/repodocs](https://github.com/samirhvbr/repodocs/blob/master/docs/versioning.md).
 
 ### `0.3.5` — 2026-09-02 — the vendored copy gets a tool, and the tool is what knows the trap
 
