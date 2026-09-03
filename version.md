@@ -1,6 +1,6 @@
 # Version — skill-LOOP
 
-**Current version:** `0.3.6`
+**Current version:** `0.3.7`
 
 > This file is the **source of truth** for the project's version. Anywhere that
 > needs to display or report the version extracts the **first semver number
@@ -65,6 +65,15 @@ commits of the same delivery repeat the version.
 ---
 
 ## 3. Changelog
+
+### `0.3.7` — 2026-09-02 — Regra de Releases no doc de agente: bump e Release sao um ato so
+
+Eco marcado da norma unica em samirhvbr/repodocs (docs/versioning.md). O
+`version.md` da branch padrao NO GITHUB e o que as Releases no GitHub mostram, e
+um commit que bumpa o `version.md` nao esta terminado ate aquela versao ter tag,
+Release e o badge `Latest`.
+
+Bloco delimitado por marcador: rodar de novo substitui, nao duplica.
 
 ### `0.3.6` — 2026-09-02 — Releases automaticas: o version.md da master vira tag e Release
 
