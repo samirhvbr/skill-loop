@@ -1,6 +1,6 @@
 # Version — skill-LOOP
 
-**Current version:** `0.3.11`
+**Current version:** `0.3.12`
 
 > This file is the **source of truth** for the project's version. Anywhere that
 > needs to display or report the version extracts the **first semver number
@@ -65,6 +65,27 @@ commits of the same delivery repeat the version.
 ---
 
 ## 3. Changelog
+
+### `0.3.12` — 2026-09-04 — The stop list goes up to 20, and shrinks to fit the window
+
+`Últimas paradas` showed 4. The panel clears the screen on every read
+(`\033[H\033[J`), so extra lines cost no scrollback — and 4 hid almost a whole
+overnight run. On the EOP the list now opens all of 02/09: twenty stops, #182 to
+#201, each with the gap to the one before it.
+
+The ceiling alone would have been a regression on a short window. `\033[H\033[J`
+scrolls the top out when the body overflows, and the top is progress, the queue
+and what ends the run — what the operator reads first. So `render()` takes the
+terminal height and trims the list to what fits. Where there is no height to
+respect — piped output, `--sem-limpar` — the output scrolls anyway and the
+ceiling of 20 is the only limit; trimming a log there would be pure loss.
+
+Two holes the mutation check opened in the tests before they were closed: the
+ceiling test compared the render against `TETO_PARADAS` rather than the literal
+20, so putting the constant back to 4 passed unnoticed; and the log path could
+not be measured through a `StringIO` at all — with no `fileno()`,
+`altura_util()` returns None whatever `main()` decides — so it is now exercised
+on a real 30-line pty. Suite: 256 tests.
 
 ### `0.3.8` — 2026-09-02 — Agent doc: Releases rule and the English-only language rule
 

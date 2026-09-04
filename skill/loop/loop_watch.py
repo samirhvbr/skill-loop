@@ -87,7 +87,15 @@ def _minutos_entre(antes, depois):
         return None
 
 
-def ultimas_paradas(loop, quantas=4):
+# The panel clears the screen on every refresh, so a longer list costs nothing in
+# scrollback. What it can cost is the header: `\033[H\033[J` scrolls the top out
+# when the body overflows, and the header (progress, queue, what ends the run) is
+# what the operator reads first. Hence a ceiling AND the fit-to-screen trim in
+# `render` — the ceiling alone would break small windows.
+TETO_PARADAS = 20
+
+
+def ultimas_paradas(loop, quantas=TETO_PARADAS):
     # Lê uma parada A MAIS do que vai mostrar: o intervalo da linha mais antiga
     # da tela precisa da anterior a ela, que já saiu da janela. Sem isso a
     # primeira linha nunca teria duração, justamente a que o operador olha
@@ -241,7 +249,11 @@ def quem_encerra(loop, st, pendentes, feitos):
     return None, None, None
 
 
-def render(loop, st, anterior):
+def render(loop, st, anterior, linhas_tela=None):
+    """`linhas_tela=None` means no height limit: the stop list goes up to
+    `TETO_PARADAS`. Callers that clear the screen pass the terminal height so the
+    list is trimmed to what fits. The decision lives in `main()`, where the tty is
+    known; keeping it out of here is what makes the panel testable."""
     pend, feitos = loop.contagem_fila()
     total = pend + feitos
     it = st.get("iteracao", 0)
@@ -332,6 +344,13 @@ def render(loop, st, anterior):
                                          C.RESET if cor else "", sufixo))
 
     paradas = ultimas_paradas(loop)
+    if paradas and linhas_tela:
+        # Reserve what still comes after this block: blank + header (2), the delta
+        # line with its blank (2), the closing border (1), and one line of slack so
+        # the shell prompt does not push the top out.
+        cabem = linhas_tela - len(L) - 6
+        if cabem < len(paradas):
+            paradas = paradas[-cabem:] if cabem > 0 else []
     if paradas:
         L.append("")
         L.append("  %sÚltimas paradas%s" % (C.DIM, C.RESET))
@@ -380,6 +399,20 @@ def imprimir_status_final(loop):
         pass
 
 
+def altura_util():
+    """Terminal height in lines, or `None` when it cannot be known.
+
+    `shutil.get_terminal_size()` never fails — it falls back to 24 — and a made-up
+    24 would trim the list on a tall window, which is the opposite of the point.
+    So only the real ioctl counts here: no size, no trim, and `TETO_PARADAS`
+    remains the single limit.
+    """
+    try:
+        return os.get_terminal_size(sys.stdout.fileno()).lines
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="loop-watch", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -409,8 +442,12 @@ def main(argv=None):
         if not st:
             print("sem .loop/STATE.json em %s" % loop.dir)
             return 1
-        texto, anterior = render(loop, st, anterior)
-        if not args.sem_limpar and sys.stdout.isatty() and not args.uma_vez:
+        limpa = not args.sem_limpar and sys.stdout.isatty() and not args.uma_vez
+        # Only the screen-clearing path has a height budget. Piped output and
+        # `--sem-limpar` scroll, so there the ceiling is the only limit.
+        texto, anterior = render(loop, st, anterior,
+                                 altura_util() if limpa else None)
+        if limpa:
             sys.stdout.write("\033[H\033[J")
         print(texto, flush=True)
 

@@ -270,6 +270,12 @@ loop-ctl porque               # parou e não continuou? este responde por quê
 O `watch -n 30 status` repinta a mesma tela; isto responde **andou?** e
 **quanto falta?** — as duas perguntas de quem não está olhando.
 
+A lista **Últimas paradas** vai até 20. O painel limpa a tela a cada leitura,
+então linha a mais não custa rolagem — e 4 escondia quase toda uma rodada de
+madrugada. Em janela baixa ela encolhe para caber: o cabeçalho (progresso e
+fila) é o que não pode sair da tela. Saída redirecionada (`--uma-vez >>
+registro.log`, `--sem-limpar`) rola de qualquer jeito, e ali as 20 saem sempre.
+
 O bloco **Fim por** vem na ordem em que o hook testa, não na do relógio, e a
 marca responde a pergunta certa das três: `← encerrou aqui` numa rodada já morta
 (o motivo é fato gravado), `← já bateu: a próxima parada encerra` quando a rodada

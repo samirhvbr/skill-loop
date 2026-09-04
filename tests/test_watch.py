@@ -10,6 +10,7 @@ primeira pelo delta entre leituras, a segunda por `minutos_ate_fechar`.
 import importlib.util
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -83,8 +84,11 @@ class TestRender(unittest.TestCase):
         with open(self.loop.p("QUEUE.md"), "w", encoding="utf-8") as f:
             f.write("# Fila\n\n" + conteudo)
 
-    def render(self, anterior=None, st=None):
-        return lw.render(self.loop, st or self.loop.ler(), anterior)
+    def render(self, anterior=None, st=None, linhas_tela=None):
+        return lw.render(self.loop, st or self.loop.ler(), anterior, linhas_tela)
+
+    def linhas_de_parada(self, texto):
+        return [l for l in texto.split("\n") if re.match(r"^\s+#\d+\s", l)]
 
     def test_mostra_proximo_item_e_progresso(self):
         texto, estado = self.render()
@@ -396,6 +400,60 @@ class TestRender(unittest.TestCase):
         self.assertIn("ilegível no STATE.json", texto)
         self.assertIn("loop-ctl armar", texto)
 
+    # ── stop list: ceiling of 20, trimmed to what fits ──────────────────
+
+    def test_stop_list_goes_up_to_twenty(self):
+        # It used to stop at 4. The panel clears the screen on every refresh, so
+        # a longer list costs no scrollback — and 4 hides most of a night's run.
+        for n in range(1, 26):
+            self.entry(n, "DOC")
+        texto, _ = self.render()
+        # The literal, not `lw.TETO_PARADAS`: comparing the render against the
+        # constant makes the test agree with whatever the constant says, and
+        # lowering it back to 4 passed unnoticed until this line was pinned.
+        self.assertEqual(len(self.linhas_de_parada(texto)), 20)
+
+    def test_stop_list_keeps_the_newest(self):
+        # Trimming the wrong end would show the start of the run forever.
+        for n in range(1, 26):
+            self.entry(n, "DOC")
+        texto, _ = self.render()
+        linhas = self.linhas_de_parada(texto)
+        self.assertIn("#25", linhas[0])
+        self.assertIn("#6", linhas[-1])
+
+    def test_short_screen_trims_the_list(self):
+        for n in range(1, 26):
+            self.entry(n, "DOC")
+        texto, _ = self.render(linhas_tela=30)
+        mostradas = len(self.linhas_de_parada(texto))
+        self.assertLess(mostradas, lw.TETO_PARADAS)
+        self.assertGreater(mostradas, 0)
+
+    def test_short_screen_keeps_the_header_on_screen(self):
+        # The reason the trim exists: `\033[H\033[J` scrolls the top out when the
+        # body overflows, and the top is progress and the queue — what the
+        # operator reads first. Overflow here means losing exactly that.
+        for n in range(1, 26):
+            self.entry(n, "DOC")
+        texto, _ = self.render(linhas_tela=30)
+        self.assertLessEqual(len(texto.split("\n")), 30)
+        self.assertIn("A fazer agora", texto)
+
+    def test_no_screen_height_means_no_trim(self):
+        # Piped output and `--sem-limpar` scroll: there the ceiling is the only
+        # limit, and a fabricated height would cut a log for no reason.
+        for n in range(1, 26):
+            self.entry(n, "DOC")
+        texto, _ = self.render(linhas_tela=None)
+        self.assertEqual(len(self.linhas_de_parada(texto)), 20)
+
+    def test_fewer_stops_than_the_ceiling_show_all(self):
+        for n in range(1, 4):
+            self.entry(n, "DOC")
+        texto, _ = self.render()
+        self.assertEqual(len(self.linhas_de_parada(texto)), 3)
+
 
 class TestCli(unittest.TestCase):
 
@@ -427,6 +485,74 @@ class TestCli(unittest.TestCase):
             rc = lw.main(["--raiz", self.tmp, "--uma-vez", "--sem-cor"])
         self.assertEqual(rc, 0)
         self.assertIn("alguma coisa", buf.getvalue())
+
+    def test_log_output_is_not_trimmed_by_screen_height(self):
+        # `--uma-vez` and piped output scroll — there is no header to protect and
+        # no height to respect. `main()` must pass no height there; if it starts
+        # passing one, a redirected log silently loses lines.
+        import io
+        import re as _re
+        from contextlib import redirect_stdout
+        loop = Loop(self.tmp)
+        os.makedirs(loop.entries)
+        with open(loop.p("QUEUE.md"), "w", encoding="utf-8") as f:
+            f.write("# Fila\n\n- [ ] alguma coisa\n")
+        loop.iniciar(objetivo="x", max_iteracoes=40)
+        for n in range(1, 26):
+            with open(os.path.join(loop.entries, "%04d-DOC-x.md" % n), "w",
+                      encoding="utf-8") as f:
+                f.write("---\nn: %d\nkind: DOC\nsinal: relato\n"
+                        "ts: 2026-08-16T21:%02d:00-03:00\ndecisao: continuou\n"
+                        "fecho_do_turno: completo\n---\n\ncorpo\n" % (n, min(n, 59)))
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            lw.main(["--raiz", self.tmp, "--uma-vez", "--sem-cor"])
+        linhas = [l for l in buf.getvalue().split("\n") if _re.match(r"^\s+#\d+\s", l)]
+        self.assertEqual(len(linhas), 20)
+
+    def test_one_shot_on_a_real_terminal_is_not_trimmed_either(self):
+        # The test above cannot see this: a StringIO has no `fileno()`, so
+        # `altura_util()` returns None regardless of what `main()` decides, and
+        # the decision goes unmeasured. On a real 30-line tty it becomes visible —
+        # `--uma-vez` does not clear the screen, so it must get no height budget.
+        import fcntl
+        import pty
+        import re as _re
+        import struct
+        import termios
+        loop = Loop(self.tmp)
+        os.makedirs(loop.entries)
+        with open(loop.p("QUEUE.md"), "w", encoding="utf-8") as f:
+            f.write("# Fila\n\n- [ ] alguma coisa\n")
+        loop.iniciar(objetivo="x", max_iteracoes=40)
+        for n in range(1, 26):
+            with open(os.path.join(loop.entries, "%04d-DOC-x.md" % n), "w",
+                      encoding="utf-8") as f:
+                f.write("---\nn: %d\nkind: DOC\nsinal: relato\n"
+                        "ts: 2026-08-16T21:%02d:00-03:00\ndecisao: continuou\n"
+                        "fecho_do_turno: completo\n---\n\ncorpo\n" % (n, min(n, 59)))
+
+        mestre, escravo = pty.openpty()
+        fcntl.ioctl(escravo, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 120, 0, 0))
+        antes = sys.stdout
+        saida = os.fdopen(escravo, "w", encoding="utf-8")
+        try:
+            sys.stdout = saida
+            lw.main(["--raiz", self.tmp, "--uma-vez", "--sem-cor"])
+            saida.flush()
+        finally:
+            sys.stdout = antes
+            saida.close()
+        bruto = b""
+        while True:
+            pedaco = os.read(mestre, 65536)
+            bruto += pedaco
+            if len(pedaco) < 65536:
+                break
+        os.close(mestre)
+        texto = bruto.decode("utf-8", "replace")
+        linhas = [l for l in texto.split("\n") if _re.match(r"^\s+#\d+\s", l)]
+        self.assertEqual(len(linhas), 20)
 
 
 class TestFormatacao(unittest.TestCase):

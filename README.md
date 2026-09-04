@@ -237,6 +237,12 @@ you actually have when you are not looking: **did it move?** (delta since the
 last read) and **how much is left?** (time remaining on every end condition,
 with the one about to trigger marked). ASK stops and partial closes are flagged.
 
+**Last stops** lists up to 20. The panel clears the screen on every read, so a
+longer list costs no scrollback — and 4 hid most of a night's run. On a short
+window it shrinks to what fits: the header (progress and queue) is what must not
+scroll off. Redirected output (`--uma-vez >> run.log`, `--sem-limpar`) scrolls
+anyway, so there the full 20 always come through.
+
 The **end-condition block** is printed in the order the hook tests them, not in
 clock order, and the marker answers whichever of three questions actually
 applies: `← encerrou aqui` on a run that already ended (the reason is recorded
