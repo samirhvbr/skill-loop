@@ -240,6 +240,7 @@ loop-watch                    # refresh every 30s
 loop-watch --ate-encerrar     # exit (with a bell) when the loop stops
 loop-watch --uma-vez >> run.log
 
+loop-ctl sessoes              # which sessions are open here? (to pick the binding)
 loop-ctl porque               # stopped and did not continue? this says why
 ```
 

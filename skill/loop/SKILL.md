@@ -189,6 +189,24 @@ marcada. ASK e fecho parcial aparecem sinalizados na lista de paradas. Com o
 loop parado, o painel avisa que o **hook está inerte** — digitar "continua" no
 chat não reativa nada.
 
+E quando armar for a pergunta — **qual sessão vai dirigir?**:
+
+```bash
+loop-ctl sessoes --raiz <repo>         # as sessões abertas ali, recente primeiro
+loop-ctl sessoes --raiz <repo> --todas # inclui as sem escrita há mais de 48 h
+loop-ctl sessoes --raiz <repo> --ids   # só os ids, um por linha (para script)
+```
+
+Existe porque a recusa de armar sem `--sessao` (`0.3.14`) mandava o operador ler
+`~/.claude*/projects/<repo>/<id>.jsonl` e tirar dali o nome do arquivo — e na
+primeira vez que alguém precisou disso de verdade (11/09) ele digitou **um
+apelido**, `EOP-b3building`, que não existe em lugar nenhum do disco. O que
+distingue uma sessão da outra na lista é o **prompt de abertura**, não o id.
+
+⚠️ A recência é a **última escrita** no transcript, nunca prova de processo
+vivo: varrer `/proc/*/fd` foi medido e deu falso negativo justamente na sessão
+que estava trabalhando.
+
 E quando o agente parar sem entrar em loop:
 
 ```bash

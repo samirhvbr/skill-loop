@@ -4,6 +4,7 @@
 
     python3 loop_ctl.py armar   --objetivo "..." [--max 200] [--sessao ID]
     python3 loop_ctl.py status
+    python3 loop_ctl.py sessoes [--ids]          # quais sessões há aqui?
     python3 loop_ctl.py porque   [--sessao ID]   # por que não continuou?
     python3 loop_ctl.py parar   [--motivo "..."]
     python3 loop_ctl.py retomar
@@ -27,6 +28,9 @@ from diagnostico import (condicoes_de_fim,             # noqa: E402
 from estado import (Loop, PADRAO, achar_raiz, agora,   # noqa: E402
                     fora_da_janela, minutos_desde, objetivo_legivel,
                     objetivo_para_exibir, parse_duracao)
+from sessoes import (JANELA_H as JANELA_SESSOES_H,     # noqa: E402
+                     formatar as formatar_sessoes, homes,
+                     parece_session_id, sessoes_do_repo)
 
 # repo/skill/loop → repo. Caminho absoluto porque quem lê a mensagem está no
 # repositório ALVO, onde "prompts/reabastecer.md" não existe.
@@ -210,7 +214,30 @@ def cmd_armar(args):
         print("                                   o agente conhece)")
         print("        --qualquer-sessao          não amarra a nenhuma; qualquer")
         print("                                   sessão do repo dirige o loop")
+        print()
+        print("      Não sabe o id?  loop-ctl sessoes --raiz %s" % loop.raiz)
         return 2
+
+    # ⚠️ AVISO, NUNCA RECUSA — e a assimetria com a guarda acima é a regra da
+    # casa, não descuido. Ali o fato é certo: NENHUM vínculo foi dito, e isso se
+    # sabe sem medir nada. Aqui o fato é incerto: um id que a varredura não achou
+    # pode ser sessão nascida há segundos, ou de um `CLAUDE_CONFIG_DIR` que ela
+    # não conhece. Recusar sobre medição que pode estar cega é como o `pre-push`
+    # do EOP trata remoto inalcançável — *"guarda que impede o trabalho quando
+    # não consegue medir é guarda que se desliga"*.
+    #
+    # E o aviso paga por si: um id com forma certa e sessão errada produz um
+    # vínculo que NUNCA casa, então a rodada nunca continua — e o sintoma disso
+    # é silêncio, que é o mais caro de diagnosticar.
+    if args.sessao:
+        conhecidas = [s["id"] for s in sessoes_do_repo(loop.raiz)]
+        if conhecidas and args.sessao not in conhecidas:
+            print("⚠️  `%s` não é uma sessão vista neste repositório." % args.sessao)
+            if not parece_session_id(args.sessao):
+                print("    Ela também não tem a forma de um session_id (8-4-4-4-12).")
+            print("    Armando assim mesmo — pode ser sessão nova. Confira com:")
+            print("      loop-ctl sessoes --raiz %s" % loop.raiz)
+            print()
 
     # Só depois das guardas: comando que recusa não pode ter deixado efeito
     # atrás. Apagar o kill-switch e então abortar desarmaria a única trava que
@@ -504,6 +531,51 @@ def cmd_fila(args):
     return 0
 
 
+def cmd_sessoes(args):
+    """As sessões abertas neste repositório, para o vínculo ser ESCOLHIDO.
+
+    ⛔ Read-only, e de propósito: este comando não arma, não amarra e não
+    sugere. Ele mostra os candidatos; quem escolhe é o operador. Um comando que
+    escolhesse sozinho seria o `--adotar-primeira-parada` com outro nome, e
+    aquele saiu na `0.3.15` porque adoção herdada em silêncio custou duas
+    rodadas do EOP.
+
+    ⚠️ Sai **0 mesmo com lista vazia**. Não achar sessão não é erro: pode ser
+    repositório recém-clonado, ou um `CLAUDE_CONFIG_DIR` que a varredura não
+    conhece. Sair não-zero faria o chamador tratar "não sei" como "não existe".
+    """
+    import time
+    raiz = _raiz(args)
+    todas = sessoes_do_repo(raiz)
+    # `--ids` NUNCA filtra por janela: ele serve para o `loop.sh` conferir se um
+    # id existe, e "existe" não tem prazo de validade. Filtrar ali faria o atalho
+    # avisar "sessão desconhecida" sobre uma sessão que está no disco.
+    if args.ids:
+        for s in todas:
+            print(s["id"])
+        return 0
+    if args.todas:
+        achadas, ocultas = todas, 0
+    else:
+        corte = time.time() - JANELA_SESSOES_H * 3600
+        achadas = [s for s in todas if s["mtime"] >= corte]
+        ocultas = len(todas) - len(achadas)
+        # Janela que esconde TUDO vira janela que não ajuda: se nada é recente,
+        # o mais recente ainda é a melhor informação que existe.
+        if not achadas and todas:
+            achadas, ocultas = todas[:10], max(0, len(todas) - 10)
+    if not achadas:
+        onde = ", ".join(homes()) or "(nenhum diretório de configuração)"
+        print("nenhuma sessão do Claude Code encontrada para %s." % raiz)
+        print("procurei em: %s" % onde)
+        print("se a sessão existe e não apareceu, passe o id direto:")
+        print("  loop-ctl armar --raiz %s --sessao <id>" % raiz)
+        return 0
+    for linha in formatar_sessoes(achadas, raiz, ocultas=ocultas):
+        print(linha)
+    return 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="loop_ctl", description=__doc__)
     ap.add_argument("--raiz", help="raiz do repositório alvo (default: procura .loop/)")
@@ -549,6 +621,14 @@ def main(argv=None):
 
     s = sub.add_parser("status", parents=[comum]); s.set_defaults(func=cmd_status)
     f = sub.add_parser("fila", parents=[comum]); f.set_defaults(func=cmd_fila)
+
+    ss = sub.add_parser("sessoes", aliases=["sessões"], parents=[comum],
+                        help="as sessões do Claude Code abertas neste repositório")
+    ss.add_argument("--ids", action="store_true",
+                    help="só os ids, um por linha (para script); ignora a janela")
+    ss.add_argument("--todas", action="store_true",
+                    help="inclui as sem escrita há mais de %dh" % JANELA_SESSOES_H)
+    ss.set_defaults(func=cmd_sessoes)
 
     q = sub.add_parser("porque", aliases=["diagnostico"], parents=[comum],
                        help="por que o loop não continuou (sai 1 se algo barra)")

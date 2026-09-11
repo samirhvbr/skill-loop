@@ -251,6 +251,7 @@ loop-watch                    # a cada 30 s
 loop-watch --ate-encerrar     # sai com sino quando o loop parar
 loop-watch --uma-vez >> registro.log
 
+loop-ctl sessoes              # que sessões há aqui? (para escolher o vínculo)
 loop-ctl porque               # parou e não continuou? este responde por quê
 ```
 

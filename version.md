@@ -1,6 +1,6 @@
 # Version — skill-LOOP
 
-**Current version:** `0.3.15`
+**Current version:** `0.3.16`
 
 > This file is the **source of truth** for the project's version. Anywhere that
 > needs to display or report the version extracts the **first semver number
@@ -65,6 +65,78 @@ commits of the same delivery repeat the version.
 ---
 
 ## 3. Changelog
+
+### `0.3.16` — 2026-09-11 — `loop-ctl sessoes`, and the shortcut names the argument it refuses
+
+The refusal added in `0.3.14` was right and its **exit was not**. It told the
+operator to read `~/.claude*/projects/<repo>/<id>.jsonl` and take the filename
+from there. Measured the first time anyone actually needed it, the same day:
+
+```
+$ ./loop.sh EOP-b3building 16h
+✗ loop.sh: RECUSO armar sem vínculo de sessão.
+```
+
+`EOP-b3building` is a **nickname**. It exists nowhere on disk. An instruction
+that tells you to go digging is not an instruction.
+
+#### Two defects, and the second is the one that matters
+
+1. ⛔ **The argument was silently discarded.** The `case` matched the glob
+   `*[0-9a-fA-F]-*[0-9a-fA-F]*`, which `EOP-b3building` fails — the character
+   before the `-` is `P`. So it slid into the duration slot and the refusal said
+   *"you passed no binding"* when the fact was *"what you passed is not an id"*.
+   A guard that refuses for the wrong reason teaches the wrong lesson.
+
+   ⚠️ And a worse case was reachable: with `LOOP_SESSAO` set in the environment,
+   `./loop.sh EOP-b3building` sent `--duracao EOP-b3building` to `loop-ctl`.
+
+2. ⛔ **There was no way to see the candidates.** Nothing in the fleet could
+   answer *"which sessions are open in this repository?"*.
+
+#### What is new
+
+`loop-ctl sessoes` lists them, newest first, with the **opening prompt** of each
+— which is what actually distinguishes the session that is working from the one
+reading the output. `--ids` gives one id per line for scripts; `--todas` includes
+the ones with no write in the last 48 h.
+
+📏 **The 48 h window is measured, not chosen.** The first real run in EOP
+returned **10 sessions, 8 of them 13 to 25 days old**. A list where 80% of the
+rows are noise pushes the reader back to guessing, which is the defect the
+command exists to kill. Hidden rows are **counted in the output**; a filter that
+does not declare itself is a filter that lies.
+
+⚠️ **It never claims a session is running.** Scanning `/proc/*/fd` for whoever
+holds the transcript open was tried and gave a **false negative on the session
+that was working** — the process opens, writes and closes. Last write is what
+can be measured; live process would be invention.
+
+#### The refusal now classifies every argument
+
+By **shape, not position**, so `<id> 10h` and `10h <id>` are the same command.
+Anything that is neither is refused **by name**, with the candidate list
+attached. The id shape is now strict (8-4-4-4-12): the old glob was loose enough
+that non-ids passed as bindings, and a binding that can never match produces a
+round that never continues — whose symptom is silence.
+
+⚠️ **`armar --sessao` warns, never refuses**, when the id is not among the
+sessions found. The scan can be blind (a session born seconds ago, a
+`CLAUDE_CONFIG_DIR` it does not know), and refusing on a measurement that may be
+blind is a guard that gets switched off.
+
+⚠️ **Degrades, never invents:** an older skill copy has no `sessoes` subcommand,
+so the list is dropped and the refusal still stands on its own.
+
+#### Proven
+
+Suite **261 → 288**. The five shortcut tests go red when the loose `case` is put
+back; the `cwd`-over-directory-name test goes red when the scan is made to trust
+the directory name. One existing assertion was **tightened, not relaxed**:
+`test_ACUSA_sem_id_o_atalho_RECUSA_e_nao_chama_o_armar` used to assert
+`loop-ctl` was never touched — a proxy that held only while the refusal called
+nothing. It now asserts the **verb** is not `armar`, so the refusal may read
+without being allowed to arm.
 
 ### `0.3.15` — 2026-09-11 — `--adotar-primeira-parada` is removed, now that the mould asks for the id
 
