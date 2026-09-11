@@ -26,7 +26,7 @@ up to a distribution.
 ## Onde está
 
 **F0 e F1 entregues no mesmo dia; duas rodadas reais feitas.** O motor existe,
-roda e tem 248 testes com os controles verificados por mutação. A rodada de 16/08
+roda e tem 288 testes com os controles verificados por mutação. A rodada de 16/08
 no EOP fechou 21/21 itens em 68 minutos com duas paradas, e a auditoria dela
 achou o defeito central do produto (ADR-012). **Duas rodadas não são medição:** a
 distribuição das condições de fim, o trabalho por iteração e a taxa de erro de
@@ -42,7 +42,7 @@ escrito.
 ## O que roda hoje
 
 ```bash
-python3 -m unittest discover -s tests -v      # 248 testes, sem modelo, sem rede
+python3 -m unittest discover -s tests -v      # 288 testes, sem modelo, sem rede
 ./install.sh --dry-run                        # mostra o que faria
 loop-ctl armar --raiz <repo> --objetivo "..." --itens 10 --sessao <id>
 ./.loop/loop.sh [6h]                          # rearma por tempo e abre o painel

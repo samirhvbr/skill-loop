@@ -161,6 +161,11 @@ class TestExecucao(Base):
         self.stub("loop-watch", self.log_watch)
         cwd = kw.pop("cwd", self.tmp)
         env = dict(os.environ, PATH=self.bin + os.pathsep + os.environ["PATH"])
+        # `LOOP_SESSAO` herdado do ambiente de quem roda a suíte mudaria o
+        # resultado de metade destes testes — some sempre, e volta só quando o
+        # teste o pede de propósito.
+        env.pop("LOOP_SESSAO", None)
+        env.update(kw.pop("env_extra", {}))
         if kw.pop("com_sessao", True) and not args:
             args = (self.SESSAO,)
         elif kw.pop("com_sessao_no_inicio", False):
@@ -219,8 +224,16 @@ class TestExecucao(Base):
         proc = self.rodar(com_sessao=False)
         self.assertEqual(proc.returncode, 1,
                          "armou sem vínculo de sessão — o defeito da P-09")
-        self.assertIsNone(self.argv(self.log_ctl),
-                          "chamou o `armar` mesmo recusando")
+        # ⚠️ A asserção é sobre o VERBO, não sobre o `loop-ctl` ter sido tocado.
+        # Até a `0.3.15` ela era `assertIsNone(argv(log_ctl))`, e aquilo era um
+        # PROXY: valia enquanto a recusa não chamava nada. Desde a `0.3.16` ela
+        # chama `loop-ctl sessoes` para imprimir os candidatos — leitura pura,
+        # que não arma coisa alguma. Manter o proxy proibiria a recusa de
+        # ajudar; o que nunca pode acontecer é `armar`, e é isso que se cobra.
+        ctl = self.argv(self.log_ctl)
+        if ctl is not None:
+            self.assertNotEqual(ctl[0], "armar",
+                                "chamou o `armar` mesmo recusando")
         self.assertIsNone(self.argv(self.log_watch),
                           "abriu painel de rodada que não foi armada")
 
@@ -237,6 +250,60 @@ class TestExecucao(Base):
         proc = self.rodar("10h", com_sessao=False)
         self.assertEqual(proc.returncode, 1,
                          "tomou `10h` como id de sessão")
+
+    # ═════════ 0.3.16 — o argumento que não é nada é NOMEADO ═════════
+    #
+    # 🔴 Medido em 11/09, a primeira vez que alguém usou a recusa de verdade: o
+    # operador digitou `./loop.sh EOP-b3building 16h`. O `case` frouxo não casou,
+    # o argumento foi DESCARTADO EM SILÊNCIO e escorregou para a duração — e a
+    # recusa acusou "não passaste vínculo", que não era o fato.
+
+    #: o apelido real que o operador digitou. Não é id, não é duração.
+    LIXO = "EOP-b3building"
+
+    def test_ACUSA_argumento_que_nao_e_id_nem_duracao_e_NOMEADO(self):
+        proc = self.rodar(self.LIXO, "16h", com_sessao=False)
+        self.assertEqual(proc.returncode, 1, "engoliu um argumento sem sentido")
+        self.assertIn(self.LIXO, proc.stderr,
+                      "recusou sem dizer QUAL argumento é o problema — é a "
+                      "recusa pelo motivo errado, o defeito de 11/09")
+        self.assertIsNone(self.argv(self.log_watch),
+                          "abriu painel de rodada que não foi armada")
+
+    def test_ACUSA_lixo_nao_vira_duracao_quando_o_vinculo_vem_do_ambiente(self):
+        # ⛔ O caso pior do `case` frouxo: com o vínculo no ambiente, o argumento
+        # não reconhecido ia inteiro para `--duracao`.
+        proc = self.rodar(self.LIXO, com_sessao=False,
+                          env_extra={"LOOP_SESSAO": self.SESSAO})
+        self.assertEqual(proc.returncode, 1,
+                         "aceitou `%s` como duração" % self.LIXO)
+        ctl = self.argv(self.log_ctl)
+        if ctl is not None:
+            self.assertNotIn(self.LIXO, ctl,
+                             "mandou o lixo para o `loop-ctl`")
+
+    def test_a_ordem_dos_dois_argumentos_nao_importa(self):
+        # Reconhecidos pela FORMA, não pela posição.
+        proc = self.rodar("10h", self.SESSAO, com_sessao=False)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        ctl = self.argv(self.log_ctl)
+        self.assertEqual(ctl[ctl.index("--duracao") + 1], "10h")
+        self.assertEqual(ctl[ctl.index("--sessao") + 1], self.SESSAO)
+
+    def test_a_recusa_do_argumento_NOMEIA_as_duas_formas_aceitas(self):
+        proc = self.rodar(self.LIXO, com_sessao=False)
+        self.assertIn("8-4-4-4-12", proc.stderr,
+                      "não diz a forma do id — recusa sem saída vira `--force`")
+        self.assertIn("6h", proc.stderr, "não diz a forma da duração")
+
+    def test_a_recusa_SOBREVIVE_a_skill_sem_o_subcomando_sessoes(self):
+        # ⚠️ Degrada, nunca inventa: cópia antiga da skill não tem `sessoes` e
+        # sai não-zero. A recusa tem de continuar de pé, só sem a lista.
+        proc = self.rodar(self.LIXO, com_sessao=False, saida_ctl=2)
+        self.assertEqual(proc.returncode, 1,
+                         "a recusa passou a depender da listagem — guarda que "
+                         "morre junto com o ajudante não é guarda")
+        self.assertIn(self.LIXO, proc.stderr)
 
     def test_ABSOLVE_o_id_pode_vir_do_AMBIENTE(self):
         self.stub("loop-ctl", self.log_ctl)
