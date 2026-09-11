@@ -558,6 +558,13 @@ ADR. Decisão nova entra aqui, com data e status, no mesmo commit da mudança.
   very file. What the guard buys is that the adoption is **said**; what the
   warning buys is that the operator hears it at the only moment he can still
   close the other chats.
+  > 🔴 **Errata de 11/09/2026 (`0.3.14`, caixa `A66` do EOP) — o atalho não pede
+  > mais a adoção: ele RECUSA.** A linha acima descreve o que a `0.2.6` decidiu, e
+  > o argumento dela (*"recusar sem saída quebraria este próprio arquivo"*) caiu
+  > por medição: o atalho passou a **exigir o id** (`<session-id>` ou
+  > `LOOP_SESSAO`), então há saída e ela não quebra nada. O que derrubou o aviso
+  > foi a reincidência — em 10/09 a adoção disparou **três vezes numa rodada só**,
+  > apagando vínculo correto. Aviso que o operador pode não ler não é guarda.
 - **No `--ate-encerrar` on the watch,** deliberately: a turn that dies without
   emitting `Stop` pins the round at `ativo: true` (P-08), and a script blocked on
   that flag would hang forever. Ctrl+C leaves the panel; the round keeps running.

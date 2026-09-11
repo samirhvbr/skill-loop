@@ -296,9 +296,12 @@ between rounds. `./.loop/loop.sh` arms for 6h and opens the panel;
 `./.loop/loop.sh 10h` takes any duration `parse_duracao` accepts. It derives the
 root from its own path — a literal root is what tied the hand-written original
 to a single repository — prefers `loop-ctl`/`loop-watch` from `PATH` and falls
-back to the absolute path of the skill copy that seeded it. It asks for
-`--adotar-primeira-parada` and warns on stderr first, because a shell cannot
-know its own `session_id` (ADR-008 amendment, P-09). Deleting it is safe: the
+back to the absolute path of the skill copy that seeded it. Since `0.3.14` it **refuses to arm
+without a session binding** — `./.loop/loop.sh <session-id>` or `LOOP_SESSAO` in
+the environment — and exits non-zero naming both incidents. A shell cannot know
+its own `session_id`, so the id is handed in rather than guessed; until `0.3.13`
+the shortcut passed `--adotar-primeira-parada` with a warning, and P-09 fired
+twice through it (2026-09-01, and three times inside one round on 2026-09-10). Deleting it is safe: the
 next `armar` writes a fresh copy. A failure to write it never fails `armar` —
 seeding happens after the state is on disk (ADR-016).
 

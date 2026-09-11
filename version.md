@@ -1,6 +1,6 @@
 # Version — skill-LOOP
 
-**Current version:** `0.3.13`
+**Current version:** `0.3.14`
 
 > This file is the **source of truth** for the project's version. Anywhere that
 > needs to display or report the version extracts the **first semver number
@@ -65,6 +65,61 @@ commits of the same delivery repeat the version.
 ---
 
 ## 3. Changelog
+
+### `0.3.14` — 2026-09-11 — the shortcut refuses to arm without a session binding
+
+Owner's verdict on box `A66` of EOP, and it settles for the whole fleet what
+`A65` settled inside one repository: **`.loop/loop.sh` refuses to arm without an
+explicit session binding.** It takes the id as its first argument or from
+`LOOP_SESSAO`, and exits non-zero naming both incidents when it has neither.
+
+#### Why a refusal, and why the 0.2.6 argument no longer holds
+
+The `0.2.6` entry below decided that adoption would be **asked for out loud**
+rather than refused, and its reason is quoted there: *"refusing with no way out
+would break this file"* — the shortcut had no way to pass `--sessao`, so a
+refusal would have broken the very artifact it protected. **That is what changed:
+the mould now takes the id**, so there is a way out and nothing breaks.
+
+🔴 **What knocked the warning down was the recurrence.** P-09 fired on
+2026-09-01 in EOP — 18 journal entries filed under unrelated items, 4 spurious
+queue items, two sessions driving one tree, four `version.md` collisions, two red
+`master`. On **2026-09-10** it fired **three times inside a single round**, each
+time erasing a binding that had already been set correctly, and each time
+silently — because adopting looks exactly like working. A warning the operator
+can miss is not a guard.
+
+#### The order of the two halves, and it is the owner's
+
+⛔ **The flag is NOT removed in this delivery, deliberately.** The verdict is
+explicit: fix the template first, and only then take `--adotar-primeira-parada`
+out of `loop_ctl.py`. Removing it first would push every caller that still lacks
+`--sessao` to `--qualquer-sessao`, which drops the binding entirely — **worse
+than today**.
+
+#### Proven in both directions
+
+Four cases in `tests/test_atalho.py`, and the suite runs **259**:
+
+- **accuses** — with no id the shortcut exits `1`, **does not call `armar`** and
+  **does not open the panel**;
+- **accuses** — the refusal names `--sessao`, `LOOP_SESSAO` and
+  `--qualquer-sessao`, because a refusal with no exit becomes `--force` the
+  following week;
+- **accuses** — `10h` alone is not mistaken for an id: a duration has no
+  session-id shape, so the script still refuses;
+- **absolves** — with the id, `armar` receives `--sessao <id>` and never
+  `--adotar-primeira-parada`; and the id may come from the environment, in which
+  case the first argument is the **duration**.
+
+#### Measured on the way, and not repaired here
+
+📏 **`0.3.13` is in the log with no entry in this changelog.** It is the same
+defect EOP measured on 2026-09-10 (`1.87.171`) and closed by moving the check
+down to `pre-push`. This repository ships `tools/git-hooks` and
+`core.hooksPath` **is not set in this clone**, so nothing here would have caught
+it. Reported rather than backfilled: the entry is the owner's to write or to
+delegate.
 
 ### `0.3.12` — 2026-09-04 — The stop list goes up to 20, and shrinks to fit the window
 
@@ -218,6 +273,13 @@ triage Dependabot PRs. The `0.2.6` guard was designed around it: refusing with n
 way out would break this file. What the guard buys is that adoption is **said**;
 what the warning buys is the operator hearing it at the only moment when closing
 the other chats is still possible.
+
+> 🔴 **Errata de 11/09/2026 (`0.3.14`): o atalho RECUSA em vez de pedir.** O
+> parágrafo acima descreve a `0.2.6` e continua sendo o registro dela. O que
+> mudou: o molde passou a **exigir o id da sessão**, então o argumento de que
+> *"recusar sem saída quebraria este arquivo"* deixou de valer. A reincidência de
+> 10/09 — três adoções numa rodada só, apagando vínculo correto — é o que
+> derrubou o aviso.
 
 No `--ate-encerrar` in the watch, deliberately: a turn that dies without emitting
 `Stop` pins the round at `ativo: true` (P-08), and a script blocked on that flag

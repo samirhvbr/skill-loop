@@ -153,11 +153,18 @@ class TestExecucao(Base):
                     + log + '"\nexit ' + str(saida) + "\n")
         os.chmod(caminho, 0o755)
 
+    #: um id com a FORMA de session_id — é ela que o script reconhece
+    SESSAO = "8262d4a0-6680-4377-9f07-80418a8dc24c"
+
     def rodar(self, *args, **kw):
         self.stub("loop-ctl", self.log_ctl, kw.pop("saida_ctl", 0))
         self.stub("loop-watch", self.log_watch)
         cwd = kw.pop("cwd", self.tmp)
         env = dict(os.environ, PATH=self.bin + os.pathsep + os.environ["PATH"])
+        if kw.pop("com_sessao", True) and not args:
+            args = (self.SESSAO,)
+        elif kw.pop("com_sessao_no_inicio", False):
+            args = (self.SESSAO,) + tuple(args)
         return subprocess.run([self.atalho] + list(args), cwd=cwd, env=env,
                               capture_output=True, text=True, timeout=30)
 
@@ -167,22 +174,26 @@ class TestExecucao(Base):
         with open(log, encoding="utf-8") as f:
             return f.read().split("\n")
 
-    def test_sem_argumento_arma_por_6h_e_abre_o_watch(self):
+    def test_com_o_id_e_sem_mais_nada_arma_por_6h_e_abre_o_watch(self):
         proc = self.rodar()
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         ctl = self.argv(self.log_ctl)
         self.assertEqual(ctl[0], "armar")
         self.assertIn("--duracao", ctl)
         self.assertEqual(ctl[ctl.index("--duracao") + 1], "6h")
-        self.assertIn("--adotar-primeira-parada", ctl)
+        self.assertIn("--sessao", ctl)
+        self.assertEqual(ctl[ctl.index("--sessao") + 1], self.SESSAO)
+        self.assertNotIn("--adotar-primeira-parada", ctl,
+                         "o atalho voltou a adotar a primeira parada (A66)")
         watch = self.argv(self.log_watch)
         self.assertIsNotNone(watch, "armou e não abriu o painel")
         self.assertEqual(watch[watch.index("--raiz") + 1], os.path.realpath(self.tmp))
 
-    def test_o_argumento_troca_a_duracao(self):
-        self.rodar("10h")
+    def test_o_segundo_argumento_troca_a_duracao(self):
+        self.rodar(self.SESSAO, "10h")
         ctl = self.argv(self.log_ctl)
         self.assertEqual(ctl[ctl.index("--duracao") + 1], "10h")
+        self.assertEqual(ctl[ctl.index("--sessao") + 1], self.SESSAO)
 
     def test_a_raiz_vem_do_script_e_nao_do_cwd(self):
         outro = tempfile.mkdtemp(prefix="loop-outro-cwd-")
@@ -198,10 +209,47 @@ class TestExecucao(Base):
         self.assertIsNone(self.argv(self.log_watch),
                           "abriu o painel de uma rodada que não foi armada")
 
-    def test_o_aviso_de_adocao_de_sessao_sai_antes_de_armar(self):
-        proc = self.rodar()
-        self.assertIn("adopt", proc.stderr.lower(),
-                      "adotar em silêncio é o defeito da P-09")
+    # ═══════════════ A66 — a recusa, nos DOIS sentidos ═══════════════
+    #
+    # ⛔ Veredito do dono em 11/09: o atalho RECUSA armar sem vínculo de sessão.
+    # A adoção silenciosa é o defeito da `P-09` — 18 entradas de diário em itens
+    # alheios em 01/09, e três reincidências numa rodada só em 10/09.
+
+    def test_ACUSA_sem_id_o_atalho_RECUSA_e_nao_chama_o_armar(self):
+        proc = self.rodar(com_sessao=False)
+        self.assertEqual(proc.returncode, 1,
+                         "armou sem vínculo de sessão — o defeito da P-09")
+        self.assertIsNone(self.argv(self.log_ctl),
+                          "chamou o `armar` mesmo recusando")
+        self.assertIsNone(self.argv(self.log_watch),
+                          "abriu painel de rodada que não foi armada")
+
+    def test_ACUSA_a_recusa_DIZ_por_que_e_como_sair_dela(self):
+        proc = self.rodar(com_sessao=False)
+        for pedaco in ("--sessao", "LOOP_SESSAO", "--qualquer-sessao"):
+            self.assertIn(pedaco, proc.stderr,
+                          "a recusa não nomeia `%s` — recusa sem saída vira "
+                          "`--force` na semana seguinte" % pedaco)
+
+    def test_ACUSA_duracao_sozinha_nao_e_confundida_com_id(self):
+        # `10h` não tem forma de session_id: o script tem de recusar, e não
+        # tomar a duração como vínculo
+        proc = self.rodar("10h", com_sessao=False)
+        self.assertEqual(proc.returncode, 1,
+                         "tomou `10h` como id de sessão")
+
+    def test_ABSOLVE_o_id_pode_vir_do_AMBIENTE(self):
+        self.stub("loop-ctl", self.log_ctl)
+        self.stub("loop-watch", self.log_watch)
+        env = dict(os.environ, PATH=self.bin + os.pathsep + os.environ["PATH"],
+                   LOOP_SESSAO=self.SESSAO)
+        proc = subprocess.run([self.atalho, "10h"], cwd=self.tmp, env=env,
+                              capture_output=True, text=True, timeout=30)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        ctl = self.argv(self.log_ctl)
+        self.assertEqual(ctl[ctl.index("--sessao") + 1], self.SESSAO)
+        self.assertEqual(ctl[ctl.index("--duracao") + 1], "10h",
+                         "com o id no ambiente, o 1º argumento é a DURAÇÃO")
 
 
 if __name__ == "__main__":

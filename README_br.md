@@ -227,11 +227,22 @@ Ele **nunca é sobrescrito**: a cópia no seu repositório é sua, e o bloco
 sobrevivem de uma rodada para a outra. Apague o arquivo e o `armar` seguinte
 escreve um novo.
 
-⚠️ Um shell não conhece o próprio `session_id`, então o atalho pede
-`--adotar-primeira-parada` e avisa na saída de erro antes de armar: a rodada se
-amarra à **primeira sessão que terminar um turno** naquele repositório, que pode
-ser um chat que você deixou aberto para outra coisa. Fechar os outros é a metade
-que só você faz (emenda do ADR-008, P-09).
+⛔ **O atalho RECUSA armar sem vínculo de sessão**, desde a `0.3.14`:
+`./.loop/loop.sh <session-id>`, ou `LOOP_SESSAO=<id>` no ambiente. Um shell não
+conhece o próprio `session_id`, então o id é **entregue**, não adivinhado.
+
+🔴 **Por que recusa e não avisa.** Até a `0.3.13` o atalho passava
+`--adotar-primeira-parada` e imprimia um aviso: a rodada se amarrava à
+**primeira sessão que terminasse um turno** naquele repositório — qualquer chat
+aberto servia. É a `P-09`, e ela disparou duas vezes. Em 01/09 adotou a sessão
+que o dono tinha aberta para triar PRs do Dependabot: 18 entradas de diário em
+itens alheios, 4 itens espúrios, duas sessões dirigindo a mesma árvore. Em 10/09
+disparou **três vezes numa rodada só**, cada vez apagando um vínculo que já
+estava correto — em silêncio, porque adotar tem a cara de trabalhar. Aviso que o
+operador pode não ler não é guarda.
+
+Adotar a primeira parada de propósito continua alcançável, e agora precisa ser
+dito: `loop-ctl armar --raiz . --duracao 6h --qualquer-sessao`.
 
 ## Acompanhar de longe
 

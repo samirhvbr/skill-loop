@@ -216,11 +216,22 @@ commented `EXTRA=(...)` block near the bottom is where `--objetivo`, `--janela`
 and `--itens` survive between rounds. Delete the file and the next `armar` writes
 a fresh one.
 
-⚠️ A shell does not know its own `session_id`, so the shortcut asks for
-`--adotar-primeira-parada` and says so on stderr before arming: the round binds
-to the **first session that ends a turn** in that repository, which may be a chat
-you left open for something else. Close the others first — that half is yours
-(ADR-008 amendment, P-09).
+⛔ **The shortcut REFUSES to arm without a session binding**, since `0.3.14`:
+`./.loop/loop.sh <session-id>`, or `LOOP_SESSAO=<id>` in the environment. A shell
+does not know its own `session_id`, so it is handed in rather than guessed.
+
+🔴 **Why a refusal and not a warning.** Until `0.3.13` the shortcut passed
+`--adotar-primeira-parada` and printed a warning: the round bound to the **first
+session that ends a turn** in that repository — any chat left open would do. That
+is P-09, and it fired twice. On 2026-09-01 it adopted the session the owner had
+open to triage Dependabot PRs: 18 journal entries filed under unrelated items, 4
+spurious queue items, two sessions driving one tree. On 2026-09-10 it fired
+**three times inside one round**, each time erasing a binding that was already
+correct — silently, because adopting looks exactly like working. A warning the
+operator can miss is not a guard.
+
+Deliberately adopting the first stop is still reachable and now has to be said
+out loud: `loop-ctl armar --raiz . --duracao 6h --qualquer-sessao`.
 
 ## Watching it from a distance
 
