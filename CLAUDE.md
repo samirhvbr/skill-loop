@@ -134,8 +134,11 @@ mensagens vagas.
     substituído na exibição pela mesma régua (`estado.objetivo_legivel`). O
     número de uma parada vem do **nome do arquivo**, nunca da iteração.
 14. A adoção de sessão é **pedida, nunca herdada**: sem `--sessao`, `armar`
-    recusa e nomeia as três saídas (`--adotar-primeira-parada`,
-    `--qualquer-sessao`) — emenda do ADR-008, custo medido na P-09.
+    recusa e nomeia as **duas** saídas (`--sessao <id>`, `--qualquer-sessao`) —
+    emenda do ADR-008, custo medido na P-09. ⛔ **O
+    `--adotar-primeira-parada` saiu na `0.3.15`** (caixa `A66` do EOP), depois
+    de a `0.3.14` fazer o molde `.loop/loop.sh` **exigir** o id: o flag existia
+    porque o atalho não tinha por onde passar `--sessao`, e essa razão morreu.
 15. O rearme por tempo é **arquivo no alvo**: `armar` semeia `.loop/loop.sh`
     quando ausente, com a raiz **derivada** do caminho do script, e **nunca**
     sobrescreve — a cópia é do dono, é onde as flags dele sobrevivem entre

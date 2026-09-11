@@ -184,23 +184,30 @@ def cmd_armar(args):
     # colisões de `version.md`, duas `master` vermelhas e dois commits que
     # anunciaram trabalho que o diff não continha.
     #
-    # ⛔ **Ela NÃO proíbe a adoção, e isso é deliberado:** quem arma de um shell
-    # não sabe o próprio `session_id`, então recusar sem saída tornaria a
-    # ferramenta inutilizável — e ferramenta que atrapalha é ferramenta que vira
-    # `--force` na semana seguinte. O que a guarda cobra é que a adoção seja
-    # **escolhida**, nunca herdada por omissão.
-    if not args.qualquer_sessao and not args.sessao \
-            and not args.adotar_primeira_parada:
+    # ⛔ **Ela NÃO proíbe a adoção, e isso segue deliberado** — mas a porta mudou
+    # de nome em 11/09 (`0.3.15`, caixa `A66` do EOP): o `--adotar-primeira-parada`
+    # SAIU, e quem quiser adoção diz `--qualquer-sessao`.
+    #
+    # 🔴 **Por que o flag saiu, e por que só DEPOIS do molde.** Ele nasceu na
+    # `0.2.6` porque *"quem arma de um shell não sabe o próprio `session_id`"* —
+    # verdadeiro na época, e o `.loop/loop.sh` semeado não tinha por onde passar
+    # `--sessao`. A `0.3.14` consertou o molde: ele **exige** o id. Com isso o
+    # flag ficou sem chamador legítimo — e um flag que só sobrevive por hábito é
+    # o caminho por onde a adoção volta a ser herdada.
+    #
+    # ⛔ **A ORDEM importa e é do dono:** remover o flag ANTES de consertar o
+    # molde empurraria todo chamador sem `--sessao` para `--qualquer-sessao`,
+    # que não amarra a nada — pior que o estado que se queria consertar.
+    if not args.qualquer_sessao and not args.sessao:
         print("erro: sem `--sessao`, `bind_session` adota a PRIMEIRA sessão que")
         print("      parar neste repositório — não a que está armando. Qualquer")
         print("      chat já aberto aqui serve, e foi assim que uma rodada do EOP")
         print("      adotou a sessão do dono em 01/09 (18 entradas arquivadas no")
         print("      item errado, 4 itens espúrios, duas sessões na mesma árvore).")
         print()
-        print("      Escolha uma das três, para que a adoção seja decisão:")
+        print("      Escolha uma das duas, para que a adoção seja decisão:")
         print("        --sessao <id>              amarra a ESTA sessão (o id que")
         print("                                   o agente conhece)")
-        print("        --adotar-primeira-parada   aceita a adoção de propósito")
         print("        --qualquer-sessao          não amarra a nenhuma; qualquer")
         print("                                   sessão do repo dirige o loop")
         return 2
@@ -520,10 +527,6 @@ def main(argv=None):
     a.add_argument("--politica", default=PADRAO["politica_ask"],
                    choices=["continuar", "continuar-exceto-irreversivel", "parar"])
     a.add_argument("--sessao", default=None, help="session_id a que o loop se prende")
-    a.add_argument("--adotar-primeira-parada", action="store_true",
-                   help="aceita DE PROPÓSITO que o loop adote a primeira sessão "
-                        "que parar neste repo (o padrão histórico, que agora "
-                        "exige ser dito)")
     a.add_argument("--qualquer-sessao", action="store_true",
                    help="não prender a uma sessão (qualquer chat no repo dirige o loop)")
     a.add_argument("--sem-colheita", action="store_true",

@@ -1,6 +1,6 @@
 # Version — skill-LOOP
 
-**Current version:** `0.3.14`
+**Current version:** `0.3.15`
 
 > This file is the **source of truth** for the project's version. Anywhere that
 > needs to display or report the version extracts the **first semver number
@@ -65,6 +65,46 @@ commits of the same delivery repeat the version.
 ---
 
 ## 3. Changelog
+
+### `0.3.15` — 2026-09-11 — `--adotar-primeira-parada` is removed, now that the mould asks for the id
+
+The second half of box `A66`, and the **order was the owner's**: the mould first
+(`0.3.14`), the flag only after. Reversing the two would have pushed every caller
+still lacking `--sessao` to `--qualquer-sessao`, which binds to nothing at all —
+worse than the state being fixed.
+
+#### Why it goes, in the words that created it
+
+The `0.2.6` amendment introduced the flag with a reason quoted in `ADR-008`:
+*"whoever does not know the id still has a one-word path"*. That path existed
+because the seeded `.loop/loop.sh` **had no way to pass `--sessao`**. `0.3.14`
+fixed the mould — it now requires the id — so the reason died with it. A flag
+that survives only by habit is the door through which adoption becomes inherited
+again, and 2026-09-10 measured it doing exactly that **three times in one round**.
+
+⚠️ **Deliberate adoption did not disappear; it changed doors.** `--qualquer-sessao`
+still arms without binding, and it has to be said out loud.
+
+#### Proven in both directions
+
+`armar` now names **two** exits instead of three, and the refusal no longer
+offers a door the parser rejects — which would have been the guard promising a
+remedy it does not implement, the defect EOP measured in `S13`/`S9` the day
+before. Three cases in `tests/test_ciclo.py`:
+
+- **accuses** — `--adotar-primeira-parada` is refused by name, with
+  `unrecognized arguments`;
+- **accuses** — the refusal message no longer mentions it;
+- **absolves** — `--qualquer-sessao` still arms, with `bind_session` false and no
+  `session_id`.
+
+Suite: **261**.
+
+#### What moved with it
+
+`CLAUDE.md`, `AGENTS.md` (rule 14), `SPEC.md` and `ADR-008` in `docs/decisoes.md`
+— the last one as a **dated erratum**, not a rewrite: the 2026-09-02 amendment
+stays as the record of what it decided, with the reason it fell written beside it.
 
 ### `0.3.14` — 2026-09-11 — the shortcut refuses to arm without a session binding
 

@@ -727,9 +727,8 @@ class TestArmarSemFila(Base):
         # medir. A guarda de sessão tem os testes dela em `test_ciclo.py`.
         args = list(args)
         if args and args[0] == "armar" and not any(
-                a in args for a in ("--sessao", "--qualquer-sessao",
-                                    "--adotar-primeira-parada")):
-            args.append("--adotar-primeira-parada")
+                a in args for a in ("--sessao", "--qualquer-sessao")):
+            args.append("--qualquer-sessao")
         proc = subprocess.run([sys.executable, CTL] + args,
                               capture_output=True, text=True, timeout=30,
                               env=dict(os.environ, CLAUDE_SETTINGS=self.settings))

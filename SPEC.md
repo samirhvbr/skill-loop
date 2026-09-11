@@ -344,7 +344,7 @@ milissegundos em qualquer repositório da máquina. `.loop/` só nasce por
 **Amarração à sessão:** `armar` não conhece o próprio `session_id` (a skill roda
 de dentro da sessão). A **primeira parada** grava o seu — é necessariamente a da
 sessão que armou. Depois disso, outra sessão no mesmo repositório é ignorada
-(ADR-008). `--qualquer-sessao` desliga a amarração; e desde 02/09 o `armar` **recusa-se** a adotar por omissão — sem `--sessao`, é preciso dizer `--adotar-primeira-parada` ou `--qualquer-sessao`. A adoção continua existindo; ela deixou de ser herdada em silêncio.
+(ADR-008). `--qualquer-sessao` desliga a amarração; e desde 02/09 o `armar` **recusa-se** a adotar por omissão — sem `--sessao`, é preciso dizer `--qualquer-sessao`. ⛔ Eram **três** saídas até a `0.3.15`, quando o `--adotar-primeira-parada` saiu (caixa `A66` do EOP): a `0.3.14` fez o molde `.loop/loop.sh` **exigir** o id, e o flag ficou sem chamador legítimo. A adoção continua existindo; ela deixou de ser herdada em silêncio.
 
 `retomar` **limpa** o `session_id` (a menos que `--sessao` venha explícito): quem
 retoma quase sempre retoma no dia seguinte, em sessão nova, e manter o id da

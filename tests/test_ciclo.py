@@ -792,11 +792,10 @@ class TestArmarNaoAdotaSessaoPorOmissao(Base):
         return self.ctl("armar", "--raiz", self.tmp,
                         "--objetivo", "fechar a fase 3", *extra)
 
-    def test_sem_flag_nenhuma_recusa_e_nomeia_as_TRES_saidas(self):
+    def test_sem_flag_nenhuma_recusa_e_nomeia_as_DUAS_saidas(self):
         rc, saida = self.armar_pelo_cli()
         self.assertEqual(rc, 2, saida)
-        for saida_esperada in ("--sessao", "--adotar-primeira-parada",
-                               "--qualquer-sessao"):
+        for saida_esperada in ("--sessao", "--qualquer-sessao"):
             self.assertIn(saida_esperada, saida,
                           "recusar sem nomear as saídas é guarda que atrapalha")
 
@@ -819,17 +818,34 @@ class TestArmarNaoAdotaSessaoPorOmissao(Base):
         self.assertEqual(st["session_id"], "sessao-123")
         self.assertTrue(st["bind_session"])
 
-    def test_adotar_primeira_parada_arma_com_o_comportamento_ANTIGO(self):
-        # o padrão histórico continua alcançável — o que mudou é ele ser dito
+    # ═══════════════ A66 — o `--adotar-primeira-parada` SAIU ═══════════════
+    #
+    # ⛔ Veredito do dono em 11/09, e a ORDEM era dele: primeiro o molde passou a
+    # exigir o id (`0.3.14`), só então o flag saiu. O contrário empurraria todo
+    # chamador sem `--sessao` para `--qualquer-sessao`, que não amarra a nada.
+
+    def test_ACUSA_o_flag_removido_nao_e_mais_aceito(self):
         rc, saida = self.armar_pelo_cli("--adotar-primeira-parada")
+        self.assertNotEqual(rc, 0,
+                            "o `--adotar-primeira-parada` voltou a existir (A66)")
+        self.assertIn("unrecognized arguments", saida,
+                      "o argparse tem de recusar o flag morto pelo nome")
+
+    def test_ACUSA_a_recusa_nao_oferece_mais_a_saida_que_nao_existe(self):
+        rc, saida = self.armar_pelo_cli()
+        self.assertEqual(rc, 2, saida)
+        self.assertNotIn("--adotar-primeira-parada", saida,
+                         "a mensagem oferece uma saída que o argparse recusa — "
+                         "é a guarda prometendo remediação que não implementa")
+
+    def test_ABSOLVE_a_adocao_de_proposito_continua_alcancavel(self):
+        # o padrão histórico não sumiu: mudou de porta, e a porta tem nome
+        rc, saida = self.armar_pelo_cli("--qualquer-sessao")
         self.assertEqual(rc, 0, saida)
         st = self.loop.ler()
-        self.assertTrue(st["bind_session"])
+        self.assertFalse(st["bind_session"],
+                         "`--qualquer-sessao` não amarra a sessão nenhuma")
         self.assertIsNone(st["session_id"])
-        self.assertIn("ADOÇÃO PEDIDA", saida,
-                      "o resumo tem de dizer que a adoção foi escolhida, senão "
-                      "a linha `a primeira que parar` volta a parecer default")
-
     def test_qualquer_sessao_arma_sem_amarrar(self):
         rc, saida = self.armar_pelo_cli("--qualquer-sessao")
         self.assertEqual(rc, 0, saida)

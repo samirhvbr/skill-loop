@@ -47,7 +47,7 @@ class Base(unittest.TestCase):
     def armar(self, *extra):
         proc = subprocess.run(
             [sys.executable, CTL, "armar", "--raiz", self.tmp,
-             "--adotar-primeira-parada"] + list(extra),
+             "--qualquer-sessao"] + list(extra),
             capture_output=True, text=True, timeout=30)
         return proc.returncode, proc.stdout + proc.stderr
 
@@ -124,7 +124,7 @@ class TestSemeadura(Base):
         os.remove(os.path.join(molde_falso, "templates", "loop.sh"))
         proc = subprocess.run(
             [sys.executable, os.path.join(molde_falso, "loop_ctl.py"), "armar",
-             "--raiz", self.tmp, "--adotar-primeira-parada"],
+             "--raiz", self.tmp, "--qualquer-sessao"],
             capture_output=True, text=True, timeout=30)
         self.assertEqual(proc.returncode, 0,
                          proc.stdout + proc.stderr)

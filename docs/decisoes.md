@@ -207,7 +207,16 @@ ADR. Decisão nova entra aqui, com data e status, no mesmo commit da mudança.
 - **Emenda (2026-09-02) — a adoção continua, e passa a ser PEDIDA.** O `armar`
   recusa-se a armar com `bind_session: true` e sem `--sessao`, e nomeia as três
   saídas: `--sessao <id>` (amarra a esta), `--adotar-primeira-parada` (aceita a
-  adoção de propósito) e `--qualquer-sessao` (não amarra a nenhuma). ⚠️ **Isto
+  adoção de propósito) e `--qualquer-sessao` (não amarra a nenhuma).
+  > 🔴 **Errata de 2026-09-11 (`0.3.15`, caixa `A66` do EOP) — as três viraram
+  > DUAS: o `--adotar-primeira-parada` saiu.** A emenda acima o criou porque
+  > *"quem não sabe o id segue tendo um caminho de uma palavra"* — e o caminho
+  > existia porque o `.loop/loop.sh` semeado **não tinha por onde passar
+  > `--sessao`**. A `0.3.14` consertou o molde: ele exige o id. Sem chamador
+  > legítimo, o flag virou a porta por onde a adoção volta a ser herdada, e a
+  > reincidência de 10/09 (três adoções numa rodada só, apagando vínculo
+  > correto) é o que o derrubou. ⛔ **A ordem foi do dono:** molde primeiro,
+  > flag depois — o contrário empurraria todo chamador para `--qualquer-sessao`. ⚠️ **Isto
   NÃO ressuscita a alternativa descartada acima** — não se exige o id, exige-se
   *dizer qual das três*; quem não sabe o id segue tendo um caminho de uma
   palavra. O que muda é que a adoção deixa de ser **herdada por omissão**, que é
