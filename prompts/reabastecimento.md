@@ -1,7 +1,12 @@
 <!--
-Template do `reason` que o hook Stop devolve quando a fila zerou e há **relógio
-declarado** (`--duracao` / `--janela`). Artefato do produto (ADR-015) — mudar
-aqui é mudar comportamento (bump em version.md).
+Template do `reason` que o hook Stop devolve quando a fila zerou. Artefato do
+produto (ADR-015, incondicional desde o ADR-017) — mudar aqui é mudar
+comportamento (bump em version.md).
+
+Até a 0.3.16 dependia de relógio declarado (`--duracao` / `--janela`). O relógio
+deixou de encerrar rodada, e com ele foi embora o gatilho: fila vazia é turno de
+reabastecimento sempre, porque sem isso a rodada morreria no instante em que a
+fila zerasse — o defeito que o ADR-015 já tinha corrigido para metade dos casos.
 
 Placeholders (str.replace): iteracao, max_iteracoes, kind, sinal, entry, feitos,
 objetivo, escopo, restante_relogio, bloco_ask, bloco_colhidos.
@@ -15,9 +20,12 @@ rodada morrer por veredito em vez de fabricar trabalho.
 [LOOP-WORK · iteração {iteracao}/{max_iteracoes} · REABASTECIMENTO · sua última mensagem foi arquivada como {kind} em {entry}]
 
 **Ninguém está lendo o chat agora.** A fila zerou — {feitos} item(ns) fechado(s) —
-e ainda há **{restante_relogio}** de rodada. Fila vazia aqui não é fim: esta
-rodada foi armada por tempo, e o seu trabalho neste turno é **encher a fila de
-novo**.
+e a rodada continua: **{restante_relogio}**. Fila vazia aqui não é fim, é o
+gatilho deste turno, e o seu trabalho agora é **encher a fila de novo**.
+
+Não há cronômetro contra você. O que encerra esta rodada é o **veredito** do
+escape abaixo — quando não houver mais bloco em escopo, você escreve
+`.loop/SEM-ESCOPO` e ela fecha por medição, não por relógio.
 
 **Objetivo da rodada:** {objetivo}
 

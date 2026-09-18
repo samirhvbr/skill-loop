@@ -24,10 +24,10 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "lib"))
 
 from diagnostico import (condicoes_de_fim,             # noqa: E402
-                         portoes_de_inercia, tem_relogio)
+                         portoes_de_inercia)
 from estado import (Loop, PADRAO, achar_raiz, agora,   # noqa: E402
-                    fora_da_janela, minutos_desde, objetivo_legivel,
-                    objetivo_para_exibir, parse_duracao)
+                    dur, fora_da_janela, minutos_desde, objetivo_legivel,
+                    objetivo_para_exibir, parse_duracao, tempo_de_producao)
 from sessoes import (JANELA_H as JANELA_SESSOES_H,     # noqa: E402
                      formatar as formatar_sessoes, homes,
                      parece_session_id, sessoes_do_repo)
@@ -62,47 +62,6 @@ def _raiz(args):
     if args.raiz:
         return os.path.abspath(args.raiz)
     return achar_raiz(os.getcwd()) or os.getcwd()
-
-
-def _com_relogio(args):
-    """A rodada em `args` foi pedida por tempo? — o mesmo teste de `tem_relogio`,
-    mas sobre a linha de comando, que é onde ele precisa valer **antes** de haver
-    estado gravado."""
-    return bool(getattr(args, "duracao", None) or getattr(args, "janela", None))
-
-
-def _recusar_fila_vazia(loop, args, verbo):
-    """`2` quando a fila não tem pendente **e não há relógio** — ou `None`.
-
-    Armar com zero pendentes e sem relógio é uma rodada **provadamente** morta:
-    `fila zerada` dispara na primeira parada, antes de escopo. Em 17/08 isso
-    aconteceu três vezes seguidas no EOP (paradas #20, #21 e #22, todas
-    `encerrou: fila zerada` na iteração 1, com 5h52 de relógio sobrando) — e cada
-    uma ainda injetou o rito de encerramento no turno de quem estava fazendo
-    outra coisa.
-
-    Era aviso e virou recusa porque o aviso já existia e não impediu nenhuma das
-    três: texto impresso depois de o estado estar gravado não é guarda-corpo.
-
-    **Com relógio a recusa sai de cena** (ADR-015): ali a fila vazia deixou de
-    encerrar, e a primeira parada é turno de reabastecimento. A guarda passou a
-    barrar exatamente o comando certo — `armar --duracao 6h` sobre fila 66/66 —,
-    e guarda-corpo que barra o caminho certo é defeito, não rigor.
-    """
-    pend, feitos = loop.contagem_fila()
-    if pend or getattr(args, "mesmo_sem_fila", False) or _com_relogio(args):
-        return None
-    print("erro: nenhum item `- [ ]` na fila — %s aqui produz uma rodada que "
-          "morre na primeira parada." % verbo)
-    if feitos:
-        print("      (a fila tem %d item(ns) já marcado(s) `- [x]`, e item feito "
-              "não é trabalho a fazer)" % feitos)
-    print("      Destile o próximo bloco em linhas `- [ ]` no fim de "
-          "%s/.loop/QUEUE.md e repita o comando." % loop.raiz)
-    print("      Ou arme por tempo — `--duracao 6h` / `--janela 08:00-18:00`: aí "
-          "a fila vazia não encerra, ela vira turno de reabastecimento (ADR-015).")
-    print("      Para armar mesmo assim, sem relógio: --mesmo-sem-fila.")
-    return 2
 
 
 def _semear_atalho(loop):
@@ -168,10 +127,6 @@ def cmd_armar(args):
               "ilegível aqui é ilegível %d vezes." % args.max)
         print("      Escreva uma linha de verdade, ou omita o argumento.")
         return 2
-
-    erro = _recusar_fila_vazia(loop, args, "armar")
-    if erro:
-        return erro
 
     # ⚠️ A ADOÇÃO SILENCIOSA DE SESSÃO — o defeito de 01–02/09 no EOP, e a
     # razão de esta guarda ficar na PORTA.
@@ -282,18 +237,14 @@ def cmd_armar(args):
     if atalho_novo:
         print("  atalho     : .loop/loop.sh criado — `./.loop/loop.sh` rearma "
               "por 6h, `./.loop/loop.sh 10h` por outro tempo")
-    if pend == 0 and tem_relogio(st):
-        print("\n⚠️  fila vazia + relógio: a **primeira parada é turno de "
-              "reabastecimento** — o hook manda destilar o próximo bloco, não "
-              "encerra (ADR-015).")
+    if pend == 0:
+        print("\n⚠️  fila vazia: a **primeira parada é turno de reabastecimento** "
+              "— o hook manda destilar o próximo bloco, não encerra (ADR-015, "
+              "sem depender de relógio desde o ADR-017).")
         if not loop.escopo_declarado():
             print("    Escopo sai só do --objetivo: sem `%s/.loop/SCOPE.md`, o "
                   "prompt avisa o agente de que a fronteira não foi declarada e "
                   "manda recusar o que for duvidoso." % loop.raiz)
-    elif pend == 0:
-        # Só se chega aqui com `--mesmo-sem-fila`: a guarda já recusou o resto.
-        print("\n⚠️  fila vazia por opção sua (--mesmo-sem-fila): o loop encerra "
-              "na primeira parada.")
     if st["janela"] and fora_da_janela(st["janela"], st["dias"]):
         print("\n⚠️  agora está FORA da janela %s: o loop encerra na primeira "
               "parada." % st["janela"])
@@ -309,18 +260,13 @@ def _fim_por(st, pendentes):
     que resumo sem ordem, porque quem lê tira conclusão de qual bate antes.
     """
     partes = ["%d iterações" % st.get("max_iteracoes", 0)]
-    if tem_relogio(st):
-        # Sob relógio a fila não fecha a rodada — quem fecha é o veredito escrito
-        # pelo agente, ou o tempo. Listar "fila zerada" aqui prometeria um fim que
-        # a cadeia não vai cumprir.
-        partes.append("escopo esgotado (veredito em .loop/SEM-ESCOPO)")
-    else:
-        partes.append("fila zerada (%d pendente(s))" % pendentes)
+    # The queue no longer closes a round in any mode (ADR-017): an empty one is a
+    # refuelling turn, and what ends the round on scope is the agent's verdict.
+    # Listing "fila zerada" here would promise an ending the chain will not honour.
+    partes.append("escopo esgotado (veredito em .loop/SEM-ESCOPO)")
     if st.get("janela"):
         partes.append("fora de %s%s" % (st["janela"],
                                         " (%s)" % st["dias"] if st.get("dias") else ""))
-    if st.get("duracao_max_min"):
-        partes.append("%dh%02d de relógio" % divmod(st["duracao_max_min"], 60))
     if st.get("escopo_itens"):
         partes.append("%d itens desta rodada" % st["escopo_itens"])
     if st.get("escopo_ate"):
@@ -350,9 +296,12 @@ def cmd_status(args):
         print("janela     : %s — agora %s"
               % (st["janela"],
                  "FORA" if fora_da_janela(st["janela"], st.get("dias")) else "dentro"))
+    produzindo = dur(tempo_de_producao(st))
     if st.get("duracao_max_min"):
-        print("relógio    : %d de %d min" % (minutos_desde(st.get("armado_em")),
-                                             st["duracao_max_min"]))
+        print("produzindo : %s (meta %s — não encerra, ADR-017)"
+              % (produzindo, dur(st["duracao_max_min"])))
+    else:
+        print("produzindo : %s" % produzindo)
     print("kill-switch: %s" % ("PRESENTE" if loop.kill_switch else "ausente"))
     if st.get("encerrado_por"):
         print("encerrado  : %s em %s" % (st["encerrado_por"], st.get("encerrado_em")))
@@ -376,8 +325,6 @@ CONSERTO_DO_FIM = {
                       "falou sem produzir; `retomar` zera o contador"),
     "fora da janela de trabalho": ("espere a janela abrir, ou rearme sem "
                                    "--janela: loop-ctl armar --raiz %s ..."),
-    "duração máxima": ("loop-ctl armar --raiz %s ... — `retomar` não zera o "
-                       "relógio, só `armar` começa rodada nova"),
     "escopo concluído": "loop-ctl armar --raiz %s ... para a rodada seguinte",
 }
 
@@ -392,20 +339,11 @@ def _avisos_de_rearme(loop, st):
     mesma coisa em momentos diferentes.
     """
     avisos = []
-    pend, _ = loop.contagem_fila()
-    if pend == 0 and not tem_relogio(st):
-        avisos.append("fila vazia: o loop encerra na primeira parada. Preencha "
-                      "%s/.loop/QUEUE.md antes de continuar." % loop.raiz)
     if loop.sem_escopo:
         avisos.append("existe %s/.loop/SEM-ESCOPO: o agente já mediu que não há "
                       "bloco em escopo, e a próxima parada encerra citando esse "
                       "veredito. Leia-o e apague o arquivo se o escopo mudou."
                       % loop.raiz)
-    if st.get("duracao_max_min") and \
-            minutos_desde(st.get("armado_em")) >= st["duracao_max_min"]:
-        avisos.append("o relógio de %d min desta rodada já estourou (armado em "
-                      "%s). `retomar` não zera o relógio — para uma rodada nova "
-                      "use `armar`." % (st["duracao_max_min"], st.get("armado_em")))
     return avisos
 
 
@@ -455,12 +393,12 @@ def cmd_porque(args):
         return 1
 
     proximo = loop.proximo_item()
-    if proximo is None and tem_relogio(st):
+    if proximo is None:
         # "continua para '—'" é a resposta certa para a pergunta errada: com a fila
-        # vazia e relógio de pé, a próxima parada tem trabalho, e é outro trabalho.
-        print("\nNada barra: a fila está vazia e há relógio, então a próxima "
-              "parada é **turno de reabastecimento** — o hook manda destilar o "
-              "próximo bloco em escopo (ADR-015).")
+        # vazia a próxima parada tem trabalho, e é outro trabalho.
+        print("\nNada barra: a fila está vazia, então a próxima parada é "
+              "**turno de reabastecimento** — o hook manda destilar o próximo "
+              "bloco em escopo (ADR-015).")
         print("Escopo: %s" % ("`.loop/SCOPE.md`" if loop.escopo_declarado()
                               else "só o --objetivo (sem .loop/SCOPE.md)"))
     else:
@@ -495,9 +433,6 @@ def cmd_retomar(args):
         print("sem .loop/ — use `armar`")
         return 1
     st = loop.ler() or dict(PADRAO)
-    erro = _recusar_fila_vazia(loop, args, "retomar")
-    if erro:
-        return erro
     if os.path.exists(loop.p("STOP")):
         os.remove(loop.p("STOP"))
     st["ativo"] = True
@@ -605,14 +540,16 @@ def main(argv=None):
                    help="não colher itens do fecho para a fila")
     a.add_argument("--sem-notificar", action="store_true")
     a.add_argument("--mesmo-sem-fila", dest="mesmo_sem_fila", action="store_true",
-                   help="armar mesmo com zero pendentes (rodada morre na 1a parada)")
+                   help="aceito e sem efeito desde a 0.4.0: fila vazia virou "
+                        "turno de reabastecimento, nunca fim (ADR-017)")
     # ── condições de fim (ADR-010) ──────────────────────────────────────────
     a.add_argument("--janela", default=None, metavar="HH:MM-HH:MM",
                    help="horário de produção, ex.: 08:00-18:00 (cruza meia-noite)")
     a.add_argument("--dias", default=None, metavar="seg-sex",
                    help="dias permitidos: seg-sex | seg,qua,sex")
     a.add_argument("--duracao", default=None, metavar="6h",
-                   help="teto de relógio desde que armou: 6h, 90m, 2h30")
+                   help="meta de produção, exibida e medida — NÃO encerra a "
+                        "rodada desde a 0.4.0 (ADR-017): 6h, 90m, 2h30")
     a.add_argument("--itens", type=int, default=None, metavar="N",
                    help="fechar N itens nesta rodada e parar")
     a.add_argument("--ate", default=None, metavar="TEXTO",
@@ -644,7 +581,7 @@ def main(argv=None):
     r.add_argument("--sessao", default=None)
     r.add_argument("--max", type=int, default=None)
     r.add_argument("--mesmo-sem-fila", dest="mesmo_sem_fila", action="store_true",
-                   help="retomar mesmo com zero pendentes")
+                   help="aceito e sem efeito desde a 0.4.0 (ADR-017)")
     r.set_defaults(func=cmd_retomar)
 
     args = ap.parse_args(argv)

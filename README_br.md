@@ -113,9 +113,9 @@ combinam livremente (ADR-010).
 | **Escopo por itens** | `--itens N` | `--itens 10` | "fecha os 10 primeiros e para" |
 | **Escopo por marcador** | `--ate TEXTO` | `--ate "3.10 VoIP"` | "vai até este item e para" |
 | **Janela de horário** | `--janela` `--dias` | `--janela 08:00-18:00 --dias seg-sex` | "produz das 8h às 18h, dia útil" |
-| **Relógio** | `--duracao` | `--duracao 6h` | teto de parede desde que armou |
-| Fila zerada | — | — | critério de pronto do ciclo — **só sem relógio** |
-| Escopo esgotado | o agente escreve `.loop/SEM-ESCOPO` | — | o fim que a rodada por tempo tem |
+| Escopo esgotado | o agente escreve `.loop/SEM-ESCOPO` | — | **o fim normal de uma rodada longa** |
+| Relógio de produção | `--duracao` | `--duracao 6h` | **meta medida, não encerra** (ADR-017) |
+| Fila zerada | — | — | **não encerra** — vira turno de reabastecimento |
 | Teto de iterações | `--max` (200) | — | rede final |
 
 O escopo por itens conta **só a rodada atual**: `feitos_ao_armar` é o
@@ -182,12 +182,17 @@ aplica — veja abaixo.)
 
 ### Fila que se reabastece — quando você quer horas, não itens
 
-Armar por tempo (`--duracao 6h`) declara que a missão é o **relógio** e que a fila
-é rascunho. Desde o `0.3.0` o motor trata assim: com relógio na mesa, `fila zerada`
-sai da cadeia de fim e a fila vazia vira **turno de reabastecimento** — o hook
-manda escolher o próximo bloco ainda não coberto dentro do escopo, ler a
+Fila vazia **nunca** encerra: ela é o gatilho do **turno de reabastecimento** — o
+hook manda escolher o próximo bloco ainda não coberto dentro do escopo, ler a
 documentação dele inteira, destilar `- [ ]` no fim do `QUEUE.md` e seguir
 trabalhando (ADR-015). Você não cola nada.
+
+Isso valia só para rodada com relógio até a `0.3.16`. Desde a `0.4.0` vale
+sempre, porque o relógio deixou de encerrar rodada (ADR-017) e era ele que
+separava os dois modos: uma rodada armada em 17/09 com `--duracao 16h` foi morta
+em `duração máxima` produzindo normalmente — `sem_progresso: 0`, 27 iterações,
+**16 itens ainda na fila**. O `--duracao` continua aceito e vira **meta medida**:
+o painel lê `produzindo há 17h37 · meta 16h00`, contando para cima.
 
 O que você dá é a **fronteira**, porque ela é sua: `.loop/SCOPE.md` com o que pode
 entrar e o que "para e pergunta" — o arquivo vai **verbatim** para o prompt. Sem
@@ -261,6 +266,7 @@ loop-ctl porque               # parou e não continuou? este responde por quê
 
   Fila   ███████████░░░░░░░░░░░  2/4  (50%)
   Agora  → item 3 — o próximo da fila
+  Tempo  produzindo há 3h12  · meta 6h00
 
   Fim por
     kill-switch                    ausente
@@ -269,7 +275,6 @@ loop-ctl porque               # parou e não continuou? este responde por quê
     escopo esgotado                não (sem .loop/SEM-ESCOPO)
     fila (não encerra)             2 pendente(s) → reabastece
     janela 05:00-22:00             fecha em 25min  ← primeira
-    relógio 6h00                   resta 6h00
 
   Últimas paradas
     #7     DOC  relato    continuou   21:43  ⚠ fecho parcial

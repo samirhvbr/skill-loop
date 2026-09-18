@@ -34,7 +34,7 @@ _AQUI = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(_AQUI), "lib"))
 
 from classificador import classificar          # noqa: E402
-from diagnostico import condicoes_de_fim, tem_relogio   # noqa: E402
+from diagnostico import condicoes_de_fim   # noqa: E402
 from estado import (Loop, achar_raiz, agora,   # noqa: E402
                     objetivo_para_exibir, restante_da_rodada)
 from transcricao import ultima_mensagem        # noqa: E402
@@ -368,13 +368,20 @@ def principal():
         "bloco_colhidos": _bloco_colhidos(colhidos),
     }
 
-    # Fila vazia com relógio na mesa não é fim — é turno de reabastecimento
-    # (ADR-015). A cadeia já deixou passar (`fila zerada` só encerra rodada sem
-    # relógio); o que muda aqui é O QUE se pede, porque o trabalho é outro:
-    # encher a fila, não executar item. Mandar o prompt de continuação com
-    # "(fila vazia)" no lugar do item era o caminho barato e o pior: o agente
-    # recebe uma ordem para executar o que não existe.
-    if item is None and tem_relogio(st):
+    # An empty queue is a refuelling turn, never an ending (ADR-015, made
+    # unconditional by ADR-017). The chain has already let it through — `fila
+    # zerada` is not an end condition at all — and what changes here is WHAT is
+    # asked, because the work is different: fill the queue, do not execute an
+    # item. Sending the continuation prompt with "(fila vazia)" in place of the
+    # item was the cheap path and the worst one: the agent gets an order to
+    # execute something that does not exist.
+    #
+    # It used to be gated on `tem_relogio(st)`, which read `--duracao`/`--janela`
+    # as "this round is about the clock, the queue is a draft". With time no
+    # longer ending anything, that gate had nothing left to read, and a round
+    # without it would die the moment the queue emptied — the very defect
+    # ADR-015 fixed.
+    if item is None:
         campos["escopo"] = _escopo(loop, st)
         campos["restante_relogio"] = restante_da_rodada(st)
         gabarito = _template(TEMPLATE_REABASTECIMENTO, FALLBACK_REABASTECIMENTO)

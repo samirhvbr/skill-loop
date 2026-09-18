@@ -121,9 +121,9 @@ writes `STATUS.md` and fires the notification.
 | **Scope by item count** | `--itens N` | `--itens 10` — "close the first 10 and stop" |
 | **Scope by marker** | `--ate TEXT` | `--ate "3.10 VoIP"` |
 | **Time window** | `--janela` `--dias` | `--janela 08:00-18:00 --dias seg-sex` |
-| **Wall clock** | `--duracao` | `--duracao 6h` |
-| Empty queue | — | the definition of done — **only without a clock** |
-| Scope exhausted | agent writes `.loop/SEM-ESCOPO` | the ending a timed run has |
+| Scope exhausted | agent writes `.loop/SEM-ESCOPO` | **the normal ending of a long run** |
+| Production clock | `--duracao` | `--duracao 6h` — **a measured target, ends nothing** (ADR-017) |
+| Empty queue | — | **does not end a run** — it triggers a refill turn |
 | Iteration ceiling | `--max` (200) | final net |
 
 Scope by item count measures **this run only** (`feitos_ao_armar` is the
@@ -172,12 +172,17 @@ at all. (For a time-bounded round the refusal does not apply — see below.)
 
 ### A queue that refills itself — when you want hours, not items
 
-Arming by time (`--duracao 6h`) declares that the **clock** is the mission and the
-queue is scratch. Since `0.3.0` the engine treats it that way: with a clock on the
-table, `empty queue` leaves the end-condition chain and an empty queue becomes a
-**refill turn** — the hook tells the agent to pick the next uncovered block within
-scope, read its documentation in full, distil `- [ ]` items at the end of
-`QUEUE.md`, and carry on working (ADR-015). You paste nothing.
+An empty queue **never** ends a run: it is what triggers a **refill turn** — the
+hook tells the agent to pick the next uncovered block within scope, read its
+documentation in full, distil `- [ ]` items at the end of `QUEUE.md`, and carry
+on working (ADR-015). You paste nothing.
+
+That held only for clocked runs until `0.3.16`. Since `0.4.0` it always holds,
+because the clock stopped ending runs (ADR-017) and the clock was what separated
+the two modes: a run armed on 17/09 with `--duracao 16h` was killed at `duração
+máxima` while producing normally — `sem_progresso: 0`, 27 iterations, **16 items
+still queued**. `--duracao` is still accepted and becomes a **measured target**:
+the panel reads `produzindo há 17h37 · meta 16h00`, counting up.
 
 What you supply is the **boundary**, because it is yours: `.loop/SCOPE.md` with what
 may enter and what "stops and asks" — the file goes into the prompt **verbatim**.

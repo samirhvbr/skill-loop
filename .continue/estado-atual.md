@@ -6,6 +6,16 @@
 
 ## Since 2026-09-02
 
+**`0.4.0` (18/09) — the clock stopped ending rounds (ADR-017).** The EOP round
+armed on 17/09 with `--duracao 16h` died at `duração máxima` while producing:
+27 iterations, `sem_progresso: 0`, 16 items still queued. `duracao_max_min` is
+now a measured target — the panel counts up (`produzindo há 17h37 · meta 16h00`)
+— and `fila zerada` left the chain with it, which makes ADR-015 unconditional:
+an empty queue always triggers refuelling, and `tem_relogio` was deleted rather
+than left returning a constant. The window still ends rounds; it answers *when*,
+not *how long*. 291 tests, five mutations checked.
+
+
 The two lines had diverged at `0.2.4` and were reconciled by **merge**: this tree
 had `0.3.0`–`0.3.3` (ADR-015 — an empty queue under a clock refills instead of
 ending), `origin/master` had `0.2.5`–`0.2.6` (the session adoption stops being

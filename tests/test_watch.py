@@ -15,7 +15,7 @@ import shutil
 import sys
 import tempfile
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(RAIZ, "skill", "loop", "lib"))
@@ -109,12 +109,40 @@ class TestRender(unittest.TestCase):
         self.assertIn("sem mudança", texto)
 
     def test_marca_a_condicao_que_bate_primeiro(self):
+        # The clock used to be the one arriving first. It no longer arrives at all
+        # (ADR-017), so the window is the only timed ending left — and it is the
+        # one the panel must mark.
         st = self.loop.ler()
-        st["duracao_max_min"] = 5          # relógio bate antes da janela larga
+        st["janela"] = "00:00-23:59"
         texto, _ = self.render(st=st)
         linhas = [l for l in texto.split("\n") if "← primeira" in l]
         self.assertEqual(len(linhas), 1)
-        self.assertIn("relógio", linhas[0])
+        self.assertIn("janela", linhas[0])
+
+    def test_o_relogio_nao_aparece_como_condicao_de_fim(self):
+        # A row under "Fim por" that never fires is the panel lying about what
+        # governs. Mutation: put the clock line back in `condicoes()` and this
+        # falls.
+        st = self.loop.ler()
+        st["duracao_max_min"] = 5
+        st["armado_em"] = "2020-01-01T00:00:00+00:00"
+        texto, _ = self.render(st=st)
+        bloco = texto.split("Fim por")[1].split("Últimas paradas")[0]
+        self.assertNotIn("duração máxima", bloco)
+
+    def test_o_tempo_conta_para_cima_no_cabecalho(self):
+        # The inversion itself: a stopwatch, not a countdown. `armado_em` two
+        # hours back reads as produced time, with the target alongside it and no
+        # claim that anything is left.
+        st = self.loop.ler()
+        st["duracao_max_min"] = 360
+        st["armado_em"] = (datetime.now().astimezone()
+                           - timedelta(hours=2)).isoformat(timespec="seconds")
+        texto, _ = self.render(st=st)
+        linha = [l for l in texto.split("\n") if "Tempo" in l][0]
+        self.assertIn("produzindo há 2h00", linha)
+        self.assertIn("meta 6h00", linha)
+        self.assertNotIn("resta", linha)
 
     def test_entry_ask_e_sinalizada(self):
         self.entry(1, "ASK", sinal="handoff")
@@ -235,24 +263,24 @@ class TestRender(unittest.TestCase):
         self.assertEqual(self._marcada(texto, "← primeira"), [])
 
     def test_rodada_viva_avisa_condicao_que_ja_bateu(self):
-        # Viva, mas a fila já está em zero: a PRÓXIMA parada encerra. Isso é
-        # fato medido, não previsão — e era o que o painel não dizia.
-        # Sem relógio, porque é só aí que fila zerada encerra (ADR-015).
-        self.fila("- [x] tudo feito\n")
+        # Viva, mas a PRÓXIMA parada encerra. Isso é fato medido, não previsão —
+        # e era o que o painel não dizia. The subject is the agent's verdict now:
+        # an empty queue stopped being an ending in every mode (ADR-017).
+        open(self.loop.p("SEM-ESCOPO"), "w", encoding="utf-8").close()
         st = self.loop.ler()
         st["janela"] = st["duracao_max_min"] = None
         texto, _ = self.render(st=st)
         ja = self._marcada(texto, "← já bateu")
         self.assertEqual(len(ja), 1)
-        self.assertIn("fila zerada", ja[0])
+        self.assertIn("escopo esgotado", ja[0])
         self.assertEqual(self._marcada(texto, "← primeira"), [])
 
-    def test_fila_zerada_com_relogio_nao_e_fim_no_painel(self):
+    def test_fila_zerada_nao_e_fim_no_painel(self):
         # O painel de 17/08, exato: `fila zerada 0 pendente(s) ← encerrou aqui`
-        # com `relógio resta 5h22` duas linhas abaixo. Sob relógio a fila vazia
-        # virou turno de reabastecimento (ADR-015), e o painel não pode mais
-        # apontá-la como fim.
-        # Mutação: tirar o `tem_relogio(st)` do `condicoes()` e esta cai.
+        # com `relógio resta 5h22` duas linhas abaixo. A fila vazia virou turno de
+        # reabastecimento (ADR-015, em todo modo desde o ADR-017), e o painel não
+        # pode mais apontá-la como fim.
+        # Mutação: devolver `fila zerada` à cadeia e esta cai.
         self.fila("- [x] tudo feito\n")
         texto, _ = self.render()
         self.assertEqual(self._marcada(texto, "← já bateu"), [])
@@ -272,14 +300,15 @@ class TestRender(unittest.TestCase):
         self.assertEqual(len(ja), 1)
         self.assertIn("escopo esgotado", ja[0])
 
-    def test_sem_condicao_batida_volta_a_valer_o_relogio(self):
-        # A pergunta "quanto falta?" continua respondida quando nada bateu.
+    def test_sem_condicao_batida_volta_a_valer_a_janela(self):
+        # A pergunta "quanto falta?" continua respondida quando nada bateu — pela
+        # janela, o único fim por tempo que sobrou (ADR-017).
         st = self.loop.ler()
-        st["duracao_max_min"] = 5
+        st["janela"] = "00:00-23:59"
         texto, _ = self.render(st=st)
         primeira = self._marcada(texto, "← primeira")
         self.assertEqual(len(primeira), 1)
-        self.assertIn("relógio", primeira[0])
+        self.assertIn("janela", primeira[0])
 
     def test_ordem_do_bloco_e_a_da_cadeia_do_hook(self):
         # O anti-quarta-cópia: se alguém reordenar o painel "para ficar bonito",
@@ -291,20 +320,22 @@ class TestRender(unittest.TestCase):
         linhas = lw.condicoes(self.loop, st, 2, 1)
         self.assertEqual([m for m, _r, _t, _x in linhas if m],
                          ["kill-switch", "teto de iterações", "sem progresso",
-                          "escopo esgotado", "fora da janela de trabalho",
-                          "duração máxima"])
+                          "escopo esgotado", "fora da janela de trabalho"])
         self.assertEqual([r for m, r, _t, _x in linhas if m is None],
                          ["fila (não encerra)"])
 
-    def test_ordem_do_bloco_sem_relogio_mantem_a_fila_como_fim(self):
-        # Rodada por itens não mudou: a fila continua sendo o critério de pronto,
-        # e continua no painel como condição de fim.
+    def test_ordem_do_bloco_sem_relogio_e_a_mesma(self):
+        # There is no "round by items" branch any more (ADR-017): with or without
+        # a clock the panel lists the same endings, and the queue is informative
+        # in both — motivo `None`, so it can never be marked as the reason.
         st = self.loop.ler()
         st["janela"] = st["duracao_max_min"] = None
         linhas = lw.condicoes(self.loop, st, 2, 1)
-        self.assertEqual([m for m, _r, _t, _x in linhas],
+        self.assertEqual([m for m, _r, _t, _x in linhas if m],
                          ["kill-switch", "teto de iterações", "sem progresso",
-                          "fila zerada"])
+                          "escopo esgotado"])
+        self.assertEqual([r for m, r, _t, _x in linhas if m is None],
+                         ["fila (não encerra)"])
 
     def test_motivo_sem_linha_propria_ainda_aparece(self):
         # `política ASK=parar` depende de classificar a mensagem, então o painel

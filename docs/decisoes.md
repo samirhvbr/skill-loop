@@ -590,6 +590,61 @@ ADR. Decisão nova entra aqui, com data e status, no mesmo commit da mudança.
 
 ---
 
+## ADR-017 — Time is measured, never enforced: the clock stops ending rounds
+
+- **Date:** 2026-09-18 · **Status:** Accepted · **Revises:** ADR-010 (drops the
+  clock from the end conditions), ADR-015 (keeps the decision, drops its gate)
+- **Observed fact.** The EOP round armed on 17/09 at 14:32 with `--duracao 16h`
+  ended at `duração máxima`: 27 iterations, `sem_progresso: 0`, **16 items still
+  in the queue**. Nothing was wrong with it — it was producing, the guardrails
+  were all green, and a number typed the night before is what stopped it. The
+  16 remaining items were owner-decision items (`🔒 MESA DO DONO`), so the round
+  had to hand back anyway; what the clock bought was cutting the work that was
+  still running.
+- **The number never meant what it enforced.** `--duracao 16h` is how the owner
+  says *"keep going tonight"*, not *"stop at 06:30"*. The ceiling was a side
+  effect of there being no other way to declare a long round — and the side
+  effect is what fired.
+- **Decision.** `duracao_max_min` leaves `condicoes_de_fim`. It stays in
+  `STATE.json`, it is still accepted on the command line, and it becomes a
+  **production target that is measured**: the panel reads `produzindo há 17h37 ·
+  meta 16h00`, counting up. A round now ends by kill switch, iteration ceiling,
+  no-progress, the agent's `SEM-ESCOPO` verdict, the work window, scope by items
+  or marker, or ASK policy — every one of them a fact about the work, not about
+  the hour.
+- **The window stays.** It answers *when* work is allowed, not *how long* it may
+  run. A round out of hours has nowhere to go; a round past a target does.
+- **`fila zerada` leaves the chain entirely, and ADR-015 becomes
+  unconditional.** ADR-015 had to gate refuelling on `tem_relogio` precisely
+  because an empty queue ended a clockless round on the spot — three EOP rounds
+  died on iteration 1. With the clock no longer ending anything, that gate had
+  nothing left to read: keeping it would mean every round dies the moment the
+  queue empties, which is the defect ADR-015 was written to fix. So refuelling is
+  what an empty queue always triggers, and `tem_relogio` is deleted rather than
+  left returning a constant.
+- **Consequences.**
+  - `restante_da_rodada` reports only what the window allows. A target that
+    never fires has no "remaining", and putting one in the refuelling prompt
+    would hand the turn a deadline nothing enforces.
+  - The empty-queue refusal in `armar`/`retomar` is gone with the defect it
+    guarded, and `--mesmo-sem-fila` is accepted as a no-op so existing
+    `.loop/loop.sh` copies keep working.
+  - A round can now run until someone stops it. That is the point, and the
+    guardrails that remain are the ones that measure the work: `sem progresso`
+    catches a loop spinning on items it cannot execute, and the iteration
+    ceiling is still there.
+- **Alternatives rejected.** *Keeping the clock as a warning* — a condition that
+  prints and does not fire is the panel lying about what governs, which is the
+  exact defect the 17/08 panel had. *Dropping the window too* — it is the only
+  lever for "not overnight", and it was not what bit: that round had
+  `janela: None`.
+- **Mutation.** Putting the clock back in the chain drops **4** tests; putting
+  `fila zerada` back drops **14**; re-gating refuelling on the clock drops
+  **2**; removing the header stopwatch drops **1**; letting the clock back into
+  `restante_da_rodada` drops **2**.
+
+---
+
 ## Pendências
 
 | # | Pendência | Estado |

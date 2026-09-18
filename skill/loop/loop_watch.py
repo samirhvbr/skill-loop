@@ -27,11 +27,10 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "lib"))
 
-from diagnostico import (condicoes_de_fim, curto,          # noqa: E402
-                         tem_relogio)
+from diagnostico import condicoes_de_fim, curto          # noqa: E402
 from estado import (NUM_DE_ENTRY, Loop, achar_raiz, dur,   # noqa: E402
                     minutos_ate_fechar, minutos_desde,
-                    objetivo_para_exibir)
+                    objetivo_para_exibir, tempo_de_producao)
 
 # ── cor ─────────────────────────────────────────────────────────────────────
 class C(object):
@@ -175,30 +174,24 @@ def condicoes(loop, st, pendentes, feitos):
     linhas.append(("sem progresso", "sem progresso",
                    "%d/%d parada(s)" % (st.get("sem_progresso", 0),
                                         st.get("max_sem_progresso", 0)), None))
-    if loop.sem_escopo or tem_relogio(st):
-        linhas.append(("escopo esgotado", "escopo esgotado",
-                       "DECLARADO" if loop.sem_escopo
-                       else "não (sem .loop/SEM-ESCOPO)", None))
-    if tem_relogio(st):
-        # Sob relógio a fila vazia NÃO encerra (ADR-015) — e dizer "0 pendente(s)"
-        # nesta linha, calado, foi exatamente como o painel de 17/08 apontou o fim
-        # para o lugar errado. A linha fica, porque quem lê quer saber da fila; o
-        # que ela não pode mais é parecer condição de fim.
-        linhas.append((None, "fila (não encerra)",
-                       "%d pendente(s) → reabastece" % pendentes, None))
-    else:
-        linhas.append(("fila zerada", "fila zerada",
-                       "%d pendente(s)" % pendentes, None))
+    linhas.append(("escopo esgotado", "escopo esgotado",
+                   "DECLARADO" if loop.sem_escopo
+                   else "não (sem .loop/SEM-ESCOPO)", None))
+    # An empty queue NEVER ends a round (ADR-015, unconditional since ADR-017) —
+    # and printing "0 pendente(s)" here, silently, is exactly how the 17/08 panel
+    # pointed at the wrong ending. The line stays, because whoever reads wants to
+    # know about the queue; what it must not do is look like an end condition.
+    linhas.append((None, "fila (não encerra)",
+                   "%d pendente(s) → reabastece" % pendentes, None))
     if st.get("janela"):
         falta = minutos_ate_fechar(st["janela"], st.get("dias"))
         rot = "janela %s%s" % (st["janela"],
                                " (%s)" % st["dias"] if st.get("dias") else "")
         linhas.append(("fora da janela de trabalho", rot,
                        "fecha em %s" % dur(falta), falta))
-    if st.get("duracao_max_min"):
-        resta = st["duracao_max_min"] - minutos_desde(st.get("armado_em"))
-        linhas.append(("duração máxima", "relógio %s" % dur(st["duracao_max_min"]),
-                       "resta %s" % dur(resta), resta))
+    # No clock line here on purpose (ADR-017): time does not end the round, and a
+    # row under "Fim por" that never fires is the panel lying about what governs.
+    # The stopwatch lives in the header instead — a count up, not a count down.
     if st.get("escopo_itens"):
         fechados = feitos - st.get("feitos_ao_armar", 0)
         falta_n = st["escopo_itens"] - fechados
@@ -306,6 +299,14 @@ def render(loop, st, anterior, linhas_tela=None):
              + ("  (%d%%)" % round(100.0 * feitos / total) if total else ""))
     prox = loop.proximo_item()
     L.append("  Agora  %s→ %s%s" % (C.NEG, (prox or "—")[:88], C.RESET))
+    # The stopwatch counts UP (ADR-017). It used to be a row under "Fim por"
+    # reading "resta 2h39", which answered "how long before I am cut off" — a
+    # question nothing asks any more. What the round has produced is the reading
+    # that survived, and it belongs next to the queue, not among the endings.
+    produzido = dur(tempo_de_producao(st))
+    meta = ("  %s· meta %s%s" % (C.DIM, dur(st["duracao_max_min"]), C.RESET)
+            if st.get("duracao_max_min") else "")
+    L.append("  Tempo  %sproduzindo há %s%s%s" % (C.NEG, produzido, C.RESET, meta))
     L.append("")
 
     linhas = condicoes(loop, st, pend, feitos)

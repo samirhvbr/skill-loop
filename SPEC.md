@@ -149,8 +149,8 @@ O texto precisa carregar, sempre:
 
 Template ausente ou ilegível → fallback embutido no hook (nunca falha).
 
-**Dois templates, um por trabalho** (ADR-015). Quando a fila está vazia e há
-relógio, o trabalho do turno não é executar item — é encher a fila —, e o hook
+**Dois templates, um por trabalho** (ADR-015). Quando a fila está vazia,
+o trabalho do turno não é executar item — é encher a fila —, e o hook
 devolve [prompts/reabastecimento.md](prompts/reabastecimento.md) (§5.2), com os
 placeholders `escopo` e `restante_relogio` no lugar de `item` e `pendentes`.
 Mandar o template de continuação com `(fila vazia)` no lugar do item era o caminho
@@ -170,18 +170,30 @@ Verificadas a cada parada, **nesta ordem**; a primeira que bater encerra:
 | 2 | teto de iterações | `max_iteracoes` | 200 |
 | 3 | sem progresso | `sem_progresso ≥ max_sem_progresso` | 3 |
 | 4 | escopo esgotado | arquivo `.loop/SEM-ESCOPO` | — |
-| 5 | fila zerada — **só sem relógio** | nenhum `- [ ]` | — |
-| 6 | fora da janela | `janela` + `dias` | `null` |
-| 7 | relógio | `duracao_max_min` | `null` |
-| 8 | escopo por itens | `escopo_itens` | `null` |
-| 9 | escopo por marcador | `escopo_ate` | `null` |
-| 10 | política de ASK | `politica_ask` | `continuar` |
+| 5 | fora da janela | `janela` + `dias` | `null` |
+| 6 | escopo por itens | `escopo_itens` | `null` |
+| 7 | escopo por marcador | `escopo_ate` | `null` |
+| 8 | política de ASK | `politica_ask` | `continuar` |
 
-**Fila zerada só encerra rodada sem relógio** (ADR-015). Com `duracao_max_min` ou
-`janela` na mesa, a missão declarada é o **tempo** e a fila é rascunho: a fila
-vazia sai da cadeia e vira **turno de reabastecimento** (§5.2). Enquanto ela
-mandava, o `--duracao` nunca chegava a valer — três rodadas do EOP encerraram na
-iteração 1 com ~5h50 sobrando.
+**Nem a fila nem o relógio encerram rodada** (ADR-017).
+
+`duracao_max_min` saiu da cadeia: é **meta de produção medida**, não teto. A
+rodada do EOP armada em 17/09 com `--duracao 16h` morreu em `duração máxima`
+produzindo normalmente — `sem_progresso: 0`, 27 iterações, **16 itens ainda na
+fila**. O número que o dono digita significa "siga hoje à noite", não "pare às
+06:30"; o teto era efeito colateral de não haver outro jeito de declarar rodada
+longa. O painel passa a ler `produzindo há 17h37 · meta 16h00`, contando para
+cima.
+
+`fila zerada` saiu inteira: fila vazia é **turno de reabastecimento** (§5.2),
+sempre. O ADR-015 já havia tirado a fila da cadeia quando havia relógio — o gate
+existia porque sem relógio a rodada morria na iteração 1, e foi o que aconteceu
+três vezes no EOP. Sem relógio encerrando nada, manter o gate significaria toda
+rodada morrendo no instante em que a fila zera.
+
+**A janela fica.** Ela responde *quando* é permitido trabalhar, não *quanto
+tempo* se pode rodar: rodada fora de hora não tem para onde ir, rodada passada da
+meta tem.
 
 **Escopo esgotado** é o fim que a rodada por tempo passou a ter: o **agente**
 escreve em `.loop/SEM-ESCOPO` o veredito com os números que mediu, e a parada
@@ -251,7 +263,7 @@ onde a decisão é do dono; sem a segunda ele fabrica trabalho para cumprir a
 cláusula — e prosa sem lastro, num repositório onde a documentação é fonte de
 verdade, é pior que parar.
 
-**Com relógio — o motor reabastece.** Fila vazia sai da cadeia de fim (§5) e o
+**O motor reabastece, sempre.** Fila vazia sai da cadeia de fim (§5) e o
 hook devolve o **segundo template**,
 [prompts/reabastecimento.md](prompts/reabastecimento.md), em vez do de
 continuação: o turno escolhe o próximo bloco não coberto dentro do escopo, lê a
@@ -266,11 +278,11 @@ arquivada em `entries/`, indexada. E o guarda-corpo contra loop infinito não é
 novo — é o `sem progresso`: turno que repõe muda a contagem da fila (que entra no
 sha1 da impressão) e zera o contador; turno que não produz nada acumula e encerra.
 
-**Sem relógio — item na cauda que se reproduz.**
-[prompts/reabastecer.md](prompts/reabastecer.md) segue válido para a rodada por
-itens: uma linha `- [ ]` colada no fim do `QUEUE.md`, que faz o mesmo trabalho e
-**repõe-se** ao final. Ali a fila continua sendo o critério de pronto do ciclo, e
-o motor não tem por que assumir que existe um próximo bloco.
+**Item na cauda que se reproduz — o caminho manual.**
+[prompts/reabastecer.md](prompts/reabastecer.md) segue válido: uma linha `- [ ]`
+colada no fim do `QUEUE.md`, que faz o mesmo trabalho e **repõe-se** ao final. É
+o que o dono escrevia à mão antes de o motor fazer isso sozinho, e continua útil
+quando o reabastecimento precisa de instrução mais específica que a do template.
 
 ---
 
@@ -349,8 +361,9 @@ sessão que armou. Depois disso, outra sessão no mesmo repositório é ignorada
 `retomar` **limpa** o `session_id` (a menos que `--sessao` venha explícito): quem
 retoma quase sempre retoma no dia seguinte, em sessão nova, e manter o id da
 rodada anterior fazia o hook sair em silêncio no portão da sessão. `retomar`
-também **não** zera `armado_em` — rodada com relógio estourado precisa de `armar`,
-e os dois comandos avisam quando é o caso.
+também **não** zera `armado_em` — e desde o ADR-017 isso deixou de ser fato a
+avisar: `armado_em` é a origem do cronômetro de produção, não de um teto, então
+rodada retomada segue contando de onde contava.
 
 **Diagnóstico:** os portões anteriores a qualquer mutação (hook instalado,
 `.loop/`, `ativo`, `fase`, amarração) e a cadeia de condições de fim ficam em

@@ -53,17 +53,19 @@ fechar os 10 primeiros", "das 8h às 18h"). Traduza a resposta em flags:
 | "vai até o item X" | `--ate "X"` |
 | "produz das 8h às 18h" | `--janela 08:00-18:00` |
 | "só dia útil" | `--dias seg-sex` |
-| "no máximo umas 6 horas" | `--duracao 6h` |
-| "até acabar" | nada — fila zerada e `--max` respondem |
+| "umas 6 horas de trabalho" | `--duracao 6h` — **meta medida, não teto** |
+| "até acabar" | nada — o veredito e `--max` respondem |
 
-⚠️ **Relógio muda o que a fila significa** (ADR-015). Com `--duracao`/`--janela`,
-`fila zerada` **não** encerra: a fila vazia vira turno de reabastecimento (§1.1), e
-a rodada acaba pelo tempo, pelos tetos, ou pelo veredito que o agente escreve em
-`.loop/SEM-ESCOPO`. Sem relógio, a fila continua sendo o critério de pronto.
+⚠️ **Tempo não encerra rodada** (ADR-017). `--duracao` é meta de produção: o
+painel conta para cima (`produzindo há 17h37 · meta 16h00`) e nada corta o
+trabalho na hora. Quem encerra é o veredito que o agente escreve em
+`.loop/SEM-ESCOPO`, o kill-switch, os tetos, a janela de horário, ou o escopo por
+itens/marcador.
 
-Combinam livremente; a primeira que bater encerra. Na dúvida, prefira **duas**
-(uma de escopo e uma de tempo) — elas se cobrem quando a fila é maior ou menor
-do que parecia.
+⚠️ **Fila zerada nunca encerra.** Fila vazia é turno de reabastecimento (§1.1),
+em qualquer modo.
+
+Combinam livremente; a primeira que bater encerra.
 
 ⚠️ O loop **não se rearma sozinho**: fechada a janela, retomar é comando.
 
@@ -97,10 +99,9 @@ Antes de armar:
 
 ### 1.1 Fila que se reabastece — quando o usuário quer horas, não itens
 
-Se o pedido é por **tempo** ("me deixa isso rodando a tarde inteira", `--duracao
-6h`) e há mais documentação do que cabe numa destilação, a fila precisa se
-reabastecer. **Com relógio isso é do motor** (ADR-015): quando a fila zera, o hook
-devolve o prompt de reabastecimento — escolher o próximo bloco não coberto **dentro
+Se há mais documentação do que cabe numa destilação, a fila precisa se
+reabastecer. **Isso é do motor** (ADR-015, sem depender de relógio desde o
+ADR-017): quando a fila zera, o hook devolve o prompt de reabastecimento — escolher o próximo bloco não coberto **dentro
 do escopo**, ler a documentação dele inteira, destilar `- [ ]` no fim do `QUEUE.md`,
 registrar o que mediu, e seguir trabalhando. Você não precisa colar nada.
 
@@ -118,9 +119,10 @@ veredito com os números em `.loop/SEM-ESCOPO` e a rodada encerra ali, como `esc
 esgotado`. Fila zerada com veredito é o desfecho certo; bloco fabricado para
 cumprir a instrução é o pior de todos.
 
-**Sem relógio** (rodada por itens), o mecanismo continua sendo um **item na cauda
-que se reproduz**: copie [prompts/reabastecer.md](../../prompts/reabastecer.md),
-troque o que está entre ‹› e cole no fim do `QUEUE.md`.
+O **item na cauda que se reproduz** continua disponível como caminho manual:
+copie [prompts/reabastecer.md](../../prompts/reabastecer.md), troque o que está
+entre ‹› e cole no fim do `QUEUE.md`. Use quando o reabastecimento precisar de
+instrução mais específica que a do template.
 
 Medido em 17/08/2026 (EOP), com o item na cauda: 14 paradas seguidas sem encerrar,
 13 com o REABASTECER como item, fila de 22 → 66 itens, e o fim veio por veredito
@@ -133,11 +135,11 @@ medição que virou motor.
 python3 <skill>/loop_ctl.py armar --objetivo "<uma linha>"
 ```
 
-`armar` **recusa** fila sem nenhum pendente (`--mesmo-sem-fila` força). Não é
-capricho: rodada sem pendente morre na primeira parada, e três delas em 17/08
-ainda gastaram um turno cada para dizer que nada havia acontecido. **Com
-`--duracao`/`--janela` a recusa não se aplica** (ADR-015): ali a fila vazia não
-morre, ela reabastece.
+`armar` **aceita** fila sem nenhum pendente: a primeira parada vira turno de
+reabastecimento. Era recusa até a `0.3.16`, porque rodada sem pendente morria na
+primeira parada — três delas em 17/08 ainda gastaram um turno cada para dizer que
+nada havia acontecido. Fila vazia deixou de encerrar (ADR-017) e a recusa foi
+embora com o defeito; `--mesmo-sem-fila` segue aceito e não faz nada.
 
 Confirme em uma linha: objetivo, quantos itens, teto de iterações, política de
 ASK, e como parar (`touch .loop/STOP` — funciona sem terminal, de qualquer
@@ -164,11 +166,11 @@ armado:
   alternativa descartada · como reverter) e siga.
 - **Marque `- [x]`** ao concluir um item, no mesmo turno, antes de seguir.
 - **Trabalho novo vira item**, não pergunta: acrescente `- [ ]` na fila.
-- **Encerre de verdade** só se a fila zerar (rodada **sem** relógio), se existir
-  `.loop/STOP`, se a próxima ação for destrutiva/irreversível sem premissa que a
-  cubra, ou se você estiver bloqueado por algo fora do seu alcance (credencial,
-  serviço fora do ar).
-- **Rodada por tempo com a fila zerada:** reabasteça (o hook manda como). Só
+- **Encerre de verdade** só se existir `.loop/STOP`, se a próxima ação for
+  destrutiva/irreversível sem premissa que a cubra, ou se você estiver bloqueado
+  por algo fora do seu alcance (credencial, serviço fora do ar). Fila vazia não
+  é fim, e passar da meta de tempo também não.
+- **Fila zerada:** reabasteça (o hook manda como). Só
   encerre escrevendo o veredito medido em `.loop/SEM-ESCOPO` — e só se **não**
   houver bloco em escopo. Nunca fabrique trabalho para manter o loop vivo.
 

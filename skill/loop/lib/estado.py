@@ -214,23 +214,32 @@ def dur(minutos):
     return "%dh%02d" % divmod(m, 60) if m >= 60 else "%dmin" % m
 
 
-def restante_da_rodada(st):
-    """Quanto falta para a rodada acabar por **tempo** — o menor entre relógio e
-    janela, já formatado. `None` nos dois devolve "sem limite de tempo".
+def tempo_de_producao(st):
+    """How long this round has been producing — a stopwatch that counts up.
 
-    Sem isto o prompt de reabastecimento diria "ainda há tempo" sem número, e um
-    turno que não sabe quanto resta trata 8 minutos como trata 4 horas.
+    This is the reading `duracao_max_min` used to hide behind (ADR-017). A
+    countdown answers "how much is left before I am cut off"; nothing cuts the
+    round off by time any more, so the honest number is how much has been
+    produced. Returns minutes as a float, `0.0` when `armado_em` is unreadable.
     """
-    candidatos = []
-    if st.get("duracao_max_min"):
-        candidatos.append(st["duracao_max_min"] - minutos_desde(st.get("armado_em")))
+    return minutos_desde(st.get("armado_em"))
+
+
+def restante_da_rodada(st):
+    """How long the round may still run before **the window** closes, formatted.
+    No window means "sem limite de tempo".
+
+    `duracao_max_min` deliberately does not enter here (ADR-017): it stopped
+    ending rounds, and a target that never fires has no "remaining" to report —
+    saying it does would put a deadline in the refuelling prompt that nothing
+    enforces. The window stays because it does end the round: out of hours, the
+    turn has nowhere to go.
+    """
     if st.get("janela"):
         falta = minutos_ate_fechar(st["janela"], st.get("dias"))
         if falta is not None:
-            candidatos.append(falta)
-    if not candidatos:
-        return "sem limite de tempo"
-    return dur(min(candidatos))
+            return dur(falta)
+    return "sem limite de tempo"
 
 
 def slug(texto, limite=48):

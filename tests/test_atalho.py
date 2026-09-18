@@ -109,10 +109,10 @@ class TestSemeadura(Base):
                              "armar apagou a configuração do dono")
 
     def test_armar_recusado_nao_deixa_atalho_atras(self):
-        # Fila zerada e sem relógio: a guarda recusa antes de gravar estado, e
-        # comando que recusa não pode ter deixado arquivo no disco.
-        self.fila(FILA_ZERADA)
-        rc, saida = self.armar()
+        # Comando que recusa não pode ter deixado arquivo no disco. The empty
+        # queue stopped being a refusal (ADR-017), so the subject moved to one
+        # that still is: an objective the STATUS.md would echo as mojibake.
+        rc, saida = self.armar("--objetivo", "¨¨")
         self.assertEqual(rc, 2, saida)
         self.assertFalse(os.path.exists(self.atalho),
                          "a semeadura correu antes das guardas")

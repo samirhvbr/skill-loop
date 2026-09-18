@@ -1,6 +1,6 @@
 # Version — skill-LOOP
 
-**Current version:** `0.3.16`
+**Current version:** `0.4.0`
 
 > This file is the **source of truth** for the project's version. Anywhere that
 > needs to display or report the version extracts the **first semver number
@@ -65,6 +65,55 @@ commits of the same delivery repeat the version.
 ---
 
 ## 3. Changelog
+
+### `0.4.0` — 2026-09-18 — Time is measured, never enforced: the clock stops ending rounds
+
+A `Y` bump: the end-condition chain is part of the `.loop/` contract, and two of
+its conditions left it (ADR-017).
+
+The round armed on the EOP on 17/09 at 14:32 with `--duracao 16h` ended at
+`duração máxima`: 27 iterations, `sem_progresso: 0`, **16 items still in the
+queue**. Nothing was wrong with it — every guardrail was green and it was
+producing. What stopped it was a number typed the night before, and that number
+never meant what it enforced: `--duracao 16h` is how the owner says *keep going
+tonight*, not *stop at 06:30*. The ceiling was a side effect of there being no
+other way to declare a long round.
+
+**`duracao_max_min` leaves the chain and becomes a measured target.** It is still
+accepted, still stored, still shown — as a stopwatch that counts up. The panel
+reads `produzindo há 17h37 · meta 16h00`; `loop-ctl status` prints `produzindo`
+instead of `relógio X de Y`. What ends a round now is the kill switch, the
+iteration ceiling, no-progress, the agent's `SEM-ESCOPO` verdict, the work
+window, scope by items or marker, or ASK policy — every one of them a fact about
+the work rather than about the hour.
+
+**The window stays**, because it answers *when* work is allowed, not *how long*
+it may run. The round that was bitten had `janela: None`.
+
+**`fila zerada` leaves the chain entirely, and ADR-015 becomes unconditional.**
+That one is not a second decision, it is the same one: ADR-015 had to gate
+refuelling on `tem_relogio` precisely because an empty queue ended a clockless
+round on the spot — three EOP rounds died on iteration 1. With nothing left for
+that gate to read, keeping it would mean every round now dies the moment the
+queue empties. So refuelling is what an empty queue always triggers, and
+`tem_relogio` is deleted rather than left returning a constant.
+
+Consequences worth knowing before you upgrade:
+
+- `restante_da_rodada` reports only what the window allows, so the refuelling
+  prompt no longer promises a deadline nothing enforces.
+- The empty-queue refusal in `armar`/`retomar` is gone with the defect it
+  guarded. `--mesmo-sem-fila` is accepted as a no-op, so existing
+  `.loop/loop.sh` copies keep working untouched.
+- **A round runs until something about the work stops it.** `sem progresso`
+  still catches a loop spinning on items it cannot execute — which is what those
+  16 owner-decision items would have been — and the iteration ceiling is still
+  there.
+
+291 tests. Mutation: putting the clock back in the chain drops 4; putting `fila
+zerada` back drops 14; re-gating refuelling on the clock drops 2; removing the
+header stopwatch drops 1; letting the clock back into `restante_da_rodada` drops
+2.
 
 ### `0.3.16` — 2026-09-11 — `loop-ctl sessoes`, and the shortcut names the argument it refuses
 

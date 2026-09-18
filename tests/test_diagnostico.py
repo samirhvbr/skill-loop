@@ -380,17 +380,17 @@ class TestCondicoesDeFim(Base):
         self.loop.gravar(st)
         self.assertEqual(self.fim()[0], "sem progresso")
 
-    def test_fila_zerada_conta_os_feitos(self):
+    def test_fila_zerada_nao_encerra_sem_relogio(self):
+        # This used to end the round, and that was the whole gate ADR-015 had to
+        # work around. ADR-017 dropped the gate: an empty queue is a refuelling
+        # turn in every mode. Mutation: put `fila zerada` back in the chain and
+        # this one falls.
         self.armar()
         self.fila(FILA_ZERADA)
-        motivo, detalhe = self.fim()
-        self.assertEqual(motivo, "fila zerada")
-        self.assertIn("2", detalhe)
+        self.assertIsNone(self.fim())
 
-    def test_fila_zerada_sai_da_cadeia_quando_ha_relogio(self):
-        # ADR-015. O relógio é a razão de a rodada existir; a fila é rascunho.
-        # Mutação: tirar o `and not tem_relogio(st)` e a cadeia volta a encerrar
-        # aqui — com horas sobrando, que é o defeito medido no EOP.
+    def test_fila_zerada_nao_encerra_com_relogio(self):
+        # Same reading from the other side, so neither branch can drift back.
         self.armar(duracao_max_min=360)
         self.fila(FILA_ZERADA)
         self.assertIsNone(self.fim())
@@ -426,12 +426,25 @@ class TestCondicoesDeFim(Base):
         self.armar(janela=janela_fechada_agora())
         self.assertEqual(self.fim()[0], "fora da janela de trabalho")
 
-    def test_relogio_estourado(self):
+    def test_relogio_estourado_nao_encerra(self):
+        # ADR-017: time is a production target, not a ceiling. The EOP round of
+        # 17/09 was producing normally — `sem_progresso: 0`, 27 iterations — when
+        # 960 minutes killed it with 16 items still queued. Blowing past the
+        # target must now change nothing.
         st = self.armar(duracao_max_min=60)
         st["armado_em"] = (datetime.now().astimezone()
                            - timedelta(hours=2)).isoformat(timespec="seconds")
         self.loop.gravar(st)
-        self.assertEqual(self.fim()[0], "duração máxima")
+        self.assertIsNone(self.fim())
+
+    def test_a_janela_ainda_encerra_com_o_relogio_estourado(self):
+        # The other half of the decision: the window answers WHEN work is
+        # allowed, not HOW LONG it may run, and it keeps ending the round.
+        st = self.armar(duracao_max_min=60, janela=janela_fechada_agora())
+        st["armado_em"] = (datetime.now().astimezone()
+                           - timedelta(hours=2)).isoformat(timespec="seconds")
+        self.loop.gravar(st)
+        self.assertEqual(self.fim()[0], "fora da janela de trabalho")
 
     def test_escopo_por_itens_conta_so_a_rodada(self):
         # A fila tem 1 feito de antes de armar, e é esse o denominador: sem ele,
@@ -475,12 +488,23 @@ class TestCondicoesDeFim(Base):
         self.armar(politica_ask="parar")
         self.assertIsNone(self.fim())
 
-    def test_contagem_recebida_vence_a_do_disco(self):
-        # O hook conta a fila DEPOIS da colheita; recontar aqui daria o número
-        # de antes, e a condição de fila zerada erraria a rodada inteira.
+    def test_fila_zerada_nao_encerra_mais(self):
+        # ADR-017 made ADR-015 unconditional: an empty queue is the refuelling
+        # trigger in every mode, never an ending. Mutation: put `fila zerada`
+        # back in the chain and this one falls.
         self.armar()
-        self.assertEqual(condicoes_de_fim(self.loop, self.loop.ler(),
-                                          contagem=(0, 9))[0], "fila zerada")
+        self.assertIsNone(condicoes_de_fim(self.loop, self.loop.ler(),
+                                           contagem=(0, 9)))
+
+    def test_contagem_recebida_vence_a_do_disco(self):
+        # O hook conta a fila DEPOIS da colheita; recontar aqui daria o número de
+        # antes. A fila não encerra mais, mas ela ainda decide o escopo por
+        # itens — e é por ele que a contagem recebida se prova.
+        self.armar(escopo_itens=1)
+        self.assertIsNone(condicoes_de_fim(self.loop, self.loop.ler(),
+                                           contagem=(3, 0)))
+        motivo, _ = condicoes_de_fim(self.loop, self.loop.ler(), contagem=(3, 9))
+        self.assertEqual(motivo, "escopo concluído")
 
 
 # ── o comando ───────────────────────────────────────────────────────────────
@@ -511,23 +535,24 @@ class TestComandoPorque(Base):
         self.loop.gravar(st)
         _, saida = self.ctl("status", "--raiz", self.tmp)
         linha = [l for l in saida.split("\n") if l.startswith("fim por")][0]
-        # `escopo esgotado` no lugar de `fila zerada` porque a rodada tem relógio
-        # (ADR-015): sob relógio a fila não fecha a rodada, o veredito escrito
-        # fecha — e o resumo não pode listar um fim que a cadeia não cumpre.
         posicoes = [linha.index(t) for t in
-                    ("iterações", "escopo esgotado", "fora de", "de relógio",
+                    ("iterações", "escopo esgotado", "fora de",
                      "itens desta rodada")]
         self.assertEqual(posicoes, sorted(posicoes))
-        self.assertNotIn("fila zerada", linha)
 
-    def test_resumo_fim_por_sem_relogio_ainda_lista_a_fila(self):
-        # A rodada por itens não mudou: sem relógio, fila zerada é o critério de
-        # pronto do ciclo (ADR-006) e continua no resumo.
-        self.armar()
-        _, saida = self.ctl("status", "--raiz", self.tmp)
-        linha = [l for l in saida.split("\n") if l.startswith("fim por")][0]
-        self.assertIn("fila zerada", linha)
-        self.assertNotIn("escopo esgotado", linha)
+    def test_resumo_fim_por_nao_promete_fim_que_a_cadeia_nao_cumpre(self):
+        # Neither the queue nor the clock ends a round any more (ADR-017), so
+        # neither may appear as an ending — in any mode. A summary that lists an
+        # ending the chain will not honour is how the 17/08 panel pointed at the
+        # wrong reason.
+        for kwargs in ({}, {"duracao_max_min": 360}):
+            st = self.armar(**kwargs)
+            self.loop.gravar(st)
+            _, saida = self.ctl("status", "--raiz", self.tmp)
+            linha = [l for l in saida.split("\n") if l.startswith("fim por")][0]
+            self.assertIn("escopo esgotado", linha)
+            self.assertNotIn("fila zerada", linha)
+            self.assertNotIn("de relógio", linha)
 
     def test_raiz_aceita_antes_e_depois_do_subcomando(self):
         # A ordem natural é depois, e era erro de uso — no comando que existe
@@ -561,21 +586,23 @@ class TestComandoPorque(Base):
         self.assertIn("kill-switch", saida)
         self.assertIn("rm ", saida)
 
-    def test_fila_vazia_aparece_mesmo_com_o_loop_parado(self):
-        # Reativar não conserta fila vazia: quem só lê "retomar" tenta, dura um
-        # turno, e volta ao escuro. Sem relógio, porque com relógio a fila vazia
-        # deixou de ser problema — ela vira reabastecimento (ADR-015).
+    def test_fila_vazia_nao_e_mais_aviso_de_rearme(self):
+        # It was a warning because an empty queue ended the round on the first
+        # stop. It no longer does (ADR-017), so warning about it would send the
+        # operator to fill a queue the hook is about to refill itself.
         st = self.armar()
         st["ativo"] = False
         self.loop.gravar(st)
         self.fila(FILA_ZERADA)
         rc, saida = self.ctl("porque", "--raiz", self.tmp)
         self.assertEqual(rc, 1)
-        self.assertIn("fila vazia", saida)
+        self.assertNotIn("fila vazia", saida)
 
-    def test_relogio_estourado_aparece_mesmo_com_o_loop_parado(self):
-        # O outro fato que reativar não conserta, e que decide o verbo: `retomar`
-        # não devolve relógio, só `armar` começa rodada nova.
+    def test_relogio_estourado_nao_e_mais_aviso_de_rearme(self):
+        # It was the fact that decided the verb — `retomar` did not give the clock
+        # back, only `armar` did. With time no longer ending anything (ADR-017)
+        # there is nothing to give back, and saying otherwise would send the
+        # operator to re-arm a round that is running fine.
         st = self.armar(duracao_max_min=60)
         st["ativo"] = False
         st["armado_em"] = (datetime.now().astimezone()
@@ -583,13 +610,12 @@ class TestComandoPorque(Base):
         self.loop.gravar(st)
         rc, saida = self.ctl("porque", "--raiz", self.tmp)
         self.assertEqual(rc, 1)
-        self.assertIn("relógio", saida)
-        self.assertIn("armar", saida)
+        self.assertNotIn("relógio", saida)
 
     def test_fila_vazia_com_relogio_nao_e_mais_aviso(self):
-        # O aviso mandava preencher a fila antes de continuar — conselho errado
-        # sob relógio, onde a primeira parada é justamente o turno que a preenche.
-        # Mutação: tirar o `not tem_relogio(st)` do aviso e esta cai.
+        # O aviso mandava preencher a fila antes de continuar — conselho errado,
+        # porque a primeira parada é justamente o turno que a preenche. Vale nos
+        # dois modos desde o ADR-017; este é o lado com relógio.
         st = self.armar(duracao_max_min=360)
         st["ativo"] = False
         self.loop.gravar(st)
@@ -679,35 +705,26 @@ class TestComandoRetomar(Base):
         self.assertEqual(depois["sem_progresso"], 0)
         self.assertIsNone(depois["encerrado_por"])
 
-    def test_retomar_recusa_fila_vazia_e_nao_reativa(self):
-        # Era aviso e virou recusa: o aviso existia em 17/08 e não impediu as
-        # três rodadas mortas do EOP. Recusa que deixa o estado ativo seria o
-        # mesmo aviso com outra cara — então o teste olha o disco, não a saída.
+    def test_retomar_reativa_com_a_fila_vazia(self):
+        # This used to be a refusal, because an empty queue meant a round that
+        # died on the first stop. It refills itself now (ADR-017), so refusing
+        # would block the state the operator actually wants.
         st = self.armar()
         st["ativo"] = False
         self.loop.gravar(st)
         self.fila(FILA_ZERADA)
-        rc, saida = self.ctl("retomar", "--raiz", self.tmp)
-        self.assertEqual(rc, 2)
-        self.assertIn("morre na primeira parada", saida)
-        self.assertFalse(self.loop.ler()["ativo"])
-
-    def test_retomar_com_mesmo_sem_fila_passa_e_avisa(self):
-        self.armar()
-        self.fila(FILA_ZERADA)
-        rc, saida = self.ctl("retomar", "--raiz", self.tmp, "--mesmo-sem-fila")
+        rc, _ = self.ctl("retomar", "--raiz", self.tmp)
         self.assertEqual(rc, 0)
-        self.assertIn("fila vazia", saida)
         self.assertTrue(self.loop.ler()["ativo"])
 
-    def test_retomar_avisa_relogio_estourado_e_manda_armar(self):
-        st = self.armar(duracao_max_min=60)
-        st["armado_em"] = (datetime.now().astimezone()
-                           - timedelta(hours=2)).isoformat(timespec="seconds")
-        self.loop.gravar(st)
-        _, saida = self.ctl("retomar", "--raiz", self.tmp)
-        self.assertIn("relógio", saida)
-        self.assertIn("armar", saida)
+    def test_mesmo_sem_fila_nao_muda_nada_no_retomar(self):
+        # The flag is accepted for compatibility and does nothing: with and
+        # without it the result has to be identical, or it is still a gate.
+        self.armar()
+        self.fila(FILA_ZERADA)
+        rc, _ = self.ctl("retomar", "--raiz", self.tmp, "--mesmo-sem-fila")
+        self.assertEqual(rc, 0)
+        self.assertTrue(self.loop.ler()["ativo"])
 
     def test_retomar_apaga_o_kill_switch(self):
         self.armar()
@@ -734,28 +751,32 @@ class TestArmarSemFila(Base):
                               env=dict(os.environ, CLAUDE_SETTINGS=self.settings))
         return proc.returncode, proc.stdout + proc.stderr
 
-    def test_recusa_e_nao_grava_estado(self):
+    def test_arma_sobre_fila_vazia_e_anuncia_reabastecimento(self):
+        # The refusal is gone with the defect it guarded: an empty queue is a
+        # refuelling turn, so arming on one is legitimate and has to say so.
         self.fila(FILA_ZERADA)
-        rc, saida = self.ctl("armar", "--raiz", self.tmp, "--objetivo", "x")
-        self.assertEqual(rc, 2)
-        self.assertIn("morre na primeira parada", saida)
-        self.assertFalse(self.loop.existe)
+        rc, saida = self.ctl("armar", "--raiz", self.tmp, "--objetivo",
+                             "modelar a Onda 2")
+        self.assertEqual(rc, 0)
+        self.assertIn("reabastecimento", saida)
+        self.assertTrue(self.loop.ler()["ativo"])
 
     def test_recusa_nao_apaga_o_kill_switch(self):
         # Comando que recusa não pode deixar efeito atrás: apagar o `.loop/STOP`
         # e então abortar desarmaria a única trava que o dono aciona sem terminal.
+        # The subject moved to a refusal that still exists — the unreadable
+        # objective — because the empty-queue one is gone (ADR-017).
         self.armar()
-        self.fila(FILA_ZERADA)
         open(self.loop.p("STOP"), "w").close()
-        rc, _ = self.ctl("armar", "--raiz", self.tmp)
+        rc, _ = self.ctl("armar", "--raiz", self.tmp, "--objetivo", "¨¨")
         self.assertEqual(rc, 2)
         self.assertTrue(self.loop.kill_switch)
 
-    def test_mesmo_sem_fila_arma_e_avisa(self):
+    def test_mesmo_sem_fila_nao_muda_nada_no_armar(self):
         self.fila(FILA_ZERADA)
-        rc, saida = self.ctl("armar", "--raiz", self.tmp, "--mesmo-sem-fila")
+        rc, _ = self.ctl("armar", "--raiz", self.tmp, "--mesmo-sem-fila",
+                         "--objetivo", "modelar a Onda 2")
         self.assertEqual(rc, 0)
-        self.assertIn("--mesmo-sem-fila", saida)
         self.assertTrue(self.loop.ler()["ativo"])
 
     def test_duracao_arma_sobre_fila_vazia(self):
@@ -794,9 +815,8 @@ class TestArmarSemFila(Base):
 
     def test_recusa_nao_apaga_o_veredito(self):
         # Mesmo princípio do kill-switch: comando que recusa não deixa efeito.
-        self.fila(FILA_ZERADA)
         open(self.loop.p("SEM-ESCOPO"), "w", encoding="utf-8").close()
-        rc, _ = self.ctl("armar", "--raiz", self.tmp)      # sem relógio → recusa
+        rc, _ = self.ctl("armar", "--raiz", self.tmp, "--objetivo", "¨¨")
         self.assertEqual(rc, 2)
         self.assertTrue(self.loop.sem_escopo)
 

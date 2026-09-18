@@ -28,7 +28,7 @@ import json
 import os
 from collections import namedtuple
 
-from estado import fora_da_janela, minutos_desde
+from estado import fora_da_janela
 
 # `ok`: True passou · False barra · None informativo (não barra, mas explica).
 Portao = namedtuple("Portao", "nome ok detalhe conserto")
@@ -161,18 +161,6 @@ def curto(sid):
 
 
 # ── condições de fim: a cadeia do hook, em um só lugar ──────────────────────
-def tem_relogio(st):
-    """A rodada foi armada por **tempo**? (ADR-015)
-
-    É o que decide se `fila zerada` encerra ou vira turno de reabastecimento.
-    Derivado de campos que já existem — `duracao_max_min` e `janela` —, e não de
-    flag nova: quem escreveu `--duracao 6h` já declarou que a missão é o relógio
-    e a fila é rascunho. Estado de versão anterior lê `None` nos dois e cai no
-    comportamento antigo, que é o certo para rodada sem relógio.
-    """
-    return bool(st.get("duracao_max_min") or st.get("janela"))
-
-
 def _primeira_linha(texto):
     """Primeira linha não vazia — o detalhe cabe numa linha do STATUS/painel."""
     for linha in (texto or "").splitlines():
@@ -189,11 +177,15 @@ def condicoes_de_fim(loop, st, res=None, texto=None, irreversivel=None,
     kill-switch primeiro porque é o comando explícito do dono, e política de ASK
     por último porque é a única que depende de classificar a mensagem.
 
-    **`fila zerada` só encerra rodada sem relógio** (ADR-015). Com `--duracao` ou
-    `--janela`, a fila vazia não é fim: é o gatilho do turno de reabastecimento,
-    e quem fecha a rodada é o relógio, o `escopo esgotado` escrito pelo agente,
-    ou os tetos. Enquanto a fila mandava, o `--duracao` nunca chegava a valer —
-    três rodadas do EOP encerraram na iteração 1 com ~5h50 sobrando.
+    **Time never ends a round on its own** (ADR-017). `duracao_max_min` is a
+    production target that gets measured, not a ceiling that fires: a round that
+    was producing normally — `sem_progresso: 0`, 27 iterations — died on the EOP
+    at 960 minutes with 16 items still queued. What ends a round on scope is the
+    agent's verdict in `.loop/SEM-ESCOPO`; an empty queue is the refuelling
+    trigger (ADR-015, now unconditional), never an ending.
+
+    `fora da janela de trabalho` stays: it answers *when* work is allowed, not
+    *how long* it may run, and a round that is out of hours has nowhere to go.
 
     - `contagem`: `(pendentes, feitos)` já lido. O hook passa o seu, colhido
       **depois** da colheita de itens; recontar aqui daria número de antes.
@@ -217,16 +209,13 @@ def condicoes_de_fim(loop, st, res=None, texto=None, irreversivel=None,
                 % st.get("sem_progresso", 0))
     if loop.sem_escopo:
         return "escopo esgotado", _primeira_linha(loop.veredito_sem_escopo())
-    if pendentes == 0 and not tem_relogio(st):
-        return "fila zerada", "%d item(ns) concluído(s)" % feitos
+    # `fila zerada` is NOT here, on purpose (ADR-017): an empty queue is the
+    # refuelling trigger, never an ending. What ends a round on scope is the
+    # agent's verdict in `.loop/SEM-ESCOPO`, read three conditions above.
     if fora_da_janela(st.get("janela"), st.get("dias")):
         return ("fora da janela de trabalho",
                 "janela %s%s" % (st.get("janela"),
                                  " (%s)" % st["dias"] if st.get("dias") else ""))
-    if st.get("duracao_max_min") and \
-            minutos_desde(st.get("armado_em")) >= st["duracao_max_min"]:
-        return ("duração máxima",
-                "%d min de relógio desde que armou" % st["duracao_max_min"])
     if st.get("escopo_itens") and \
             (feitos - st.get("feitos_ao_armar", 0)) >= st["escopo_itens"]:
         return ("escopo concluído",

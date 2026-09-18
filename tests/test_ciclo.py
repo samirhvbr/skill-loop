@@ -332,9 +332,9 @@ class TestGuardaCorpos(Base):
         `notificado` é o único estado que não depende de sequência.
         """
         self.armar()
-        self.zerar_a_fila()
+        open(self.loop.p("STOP"), "w").close()
         _, primeiro = self.rodar(DOC)
-        self._encerrou(primeiro, "fila zerada")
+        self._encerrou(primeiro, "kill-switch")
         self.assertTrue(self.loop.ler()["notificado"],
                         "emitir o aviso tem de marcar a rodada como notificada")
 
@@ -366,22 +366,24 @@ class TestGuardaCorpos(Base):
         _, saida = self.rodar(DOC)
         self._encerrou(saida, "kill-switch")
 
-    def test_fila_zerada_encerra(self):
-        # Sem relógio, a fila continua sendo o critério de pronto do ciclo
-        # (ADR-006): quem armou por itens declarou onde a rodada acaba.
+    def test_fila_zerada_reabastece_sem_relogio(self):
+        # This ended the round until ADR-017. It was also the whole reason ADR-015
+        # needed a clock to gate on: with no clock the round died the moment the
+        # queue emptied. Refuelling is unconditional now, so both branches behave
+        # the same — and this is the branch that changed.
         self.armar()
         self.zerar_a_fila()
         _, saida = self.rodar(DOC)
-        self._encerrou(saida, "fila zerada")
+        self.assertEqual(saida["decision"], "block")
+        self.assertNotIn("ENCERROU", saida["reason"])
+        self.assertIn("REABASTECIMENTO", saida["reason"])
 
-    # ── fila vazia sob relógio: reabastecer, não encerrar (ADR-015) ─────────
+    # ── fila vazia: reabastecer, nunca encerrar (ADR-015 + ADR-017) ─────────
 
     def test_fila_zerada_com_relogio_reabastece(self):
         # O defeito medido: três rodadas do EOP armadas com `--duracao 6h` sobre
         # fila cheia de `- [x]` morreram na iteração 1, com ~5h50 sobrando, porque
-        # `fila zerada` vinha antes do relógio na cadeia. Sob relógio a fila vazia
-        # não é fim — é o gatilho do turno que enche a fila.
-        # Mutação: tirar o `and not tem_relogio(st)` da cadeia e esta cai.
+        # `fila zerada` vinha antes do relógio na cadeia.
         self.armar(duracao_max_min=360)
         self.zerar_a_fila()
         _, saida = self.rodar(DOC)
@@ -399,22 +401,24 @@ class TestGuardaCorpos(Base):
         _, saida = self.rodar(DOC)
         self.assertIn("REABASTECIMENTO", saida["reason"])
 
-    def test_prompt_de_reabastecimento_diz_quanto_resta(self):
-        # Um turno que não sabe quanto resta trata 8 minutos como trata 4 horas.
+    def test_prompt_de_reabastecimento_nao_promete_prazo_do_relogio(self):
+        # `--duracao` stopped ending the round (ADR-017), so it has no "remaining"
+        # to report. Putting one in the prompt would hand the turn a deadline
+        # nothing enforces — and the turn would size its reading by it.
         self.armar(duracao_max_min=360)
         self.zerar_a_fila()
         _, saida = self.rodar(DOC)
-        self.assertIn("**6h00** de rodada", saida["reason"])
+        self.assertNotIn("**6h00** de rodada", saida["reason"])
+        self.assertIn("sem limite de tempo", saida["reason"])
 
-    def test_prompt_promete_o_menor_entre_janela_e_relogio(self):
-        # Quando os dois estão de pé vale o MENOR: prometer 30h para um turno que
-        # tem até o fim do dia faz ele começar leitura que não termina. Relógio
-        # absurdo de propósito — a janela fecha no mesmo dia, qualquer que seja a
-        # hora em que a suíte rode.
+    def test_prompt_promete_o_que_a_janela_permite(self):
+        # The window does end the round, so it is the one deadline the turn can
+        # be told about: promising 30h to a turn that has until end of day makes
+        # it start reading it cannot finish.
         self.armar(duracao_max_min=1800, janela="00:00-23:59")
         self.zerar_a_fila()
         _, saida = self.rodar(DOC)
-        resta = saida["reason"].split("e ainda há **")[1].split("**")[0]
+        resta = saida["reason"].split("a rodada continua: **")[1].split("**")[0]
         self.assertNotEqual(resta, "30h00")
         self.assertLess(int(resta.split("h")[0]), 24)
 
@@ -556,17 +560,22 @@ class TestGuardaCorpos(Base):
         # fazendo outra coisa — cada rodada durou uma parada, com horas de
         # relógio sobrando. Nada aconteceu, então não há o que relatar.
         # Mutação: remover o `nada_aconteceu` e o `block` volta a sair.
+        #
+        # The trigger moved: a queue of `- [x]` no longer kills the round at all
+        # (ADR-017), so the round that is born dead is the one the owner stops
+        # before it produces anything — `.loop/STOP` on iteration 1.
         with open(self.loop.p("QUEUE.md"), "w", encoding="utf-8") as f:
             f.write("# Fila\n\n- [x] tudo isto já era feito antes de armar\n")
         self.armar()
         self.assertEqual(self.loop.ler()["pendentes_ao_armar"], 0)
+        open(self.loop.p("STOP"), "w").close()
         rc, saida = self.rodar(DOC)
         self.assertEqual(rc, 0)
         self.assertIsNone(saida.get("reason") if saida else None)
         self.assertIn("nada a relatar", saida["systemMessage"])
         # O registro continua: encerrar calado não é encerrar sem rastro.
         self.assertTrue(os.path.exists(self.loop.p("STATUS.md")))
-        self.assertEqual(self.loop.ler()["encerrado_por"], "fila zerada")
+        self.assertEqual(self.loop.ler()["encerrado_por"], "kill-switch")
         self.assertFalse(self.loop.ler()["ativo"])
 
     def test_encerrar_na_primeira_parada_depois_de_trabalho_relata(self):
@@ -586,8 +595,9 @@ class TestGuardaCorpos(Base):
         with open(self.loop.p("QUEUE.md"), "w", encoding="utf-8") as f:
             f.write("# Fila\n\n- [x] pronto\n")
         self.loop.gravar(st)
+        open(self.loop.p("STOP"), "w").close()
         _, saida = self.rodar(DOC)
-        self._encerrou(saida, "fila zerada")
+        self._encerrou(saida, "kill-switch")
 
     def test_parada_seguinte_ao_aviso_encerra_de_verdade(self):
         self.armar()
@@ -673,14 +683,17 @@ class TestCondicoesDeFim(Base):
         _, saida = self.rodar(DOC)
         self.assertNotIn("ENCERROU", saida["reason"])
 
-    def test_duracao_maxima_encerra(self):
+    def test_duracao_maxima_nao_encerra_mais(self):
+        # The EOP round of 17/09: 27 iterations, `sem_progresso: 0`, 16 items
+        # still queued, killed at 960 minutes. Time is measured now, not enforced
+        # (ADR-017). Mutation: put the condition back in the chain and this falls.
         self.armar()
         st = self.loop.ler()
         st["duracao_max_min"] = 1
         st["armado_em"] = "2020-01-01T00:00:00+00:00"
         self.loop.gravar(st)
         _, saida = self.rodar(DOC)
-        self.assertIn("duração máxima", saida["reason"])
+        self.assertNotIn("ENCERROU", saida["reason"])
 
     def test_duracao_dentro_do_teto_continua(self):
         self.armar(duracao_max_min=600)
