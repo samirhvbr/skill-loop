@@ -26,8 +26,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "li
 from diagnostico import (condicoes_de_fim,             # noqa: E402
                          portoes_de_inercia)
 from estado import (Loop, PADRAO, achar_raiz, agora,   # noqa: E402
-                    dur, fora_da_janela, minutos_desde, objetivo_legivel,
-                    objetivo_para_exibir, parse_duracao, tempo_de_producao)
+                    decorrido, dur, fora_da_janela, minutos_desde,
+                    objetivo_legivel, objetivo_para_exibir, parse_duracao,
+                    tempo_de_producao)
 from sessoes import (JANELA_H as JANELA_SESSOES_H,     # noqa: E402
                      formatar as formatar_sessoes, homes,
                      parece_session_id, sessoes_do_repo)
@@ -296,7 +297,7 @@ def cmd_status(args):
         print("janela     : %s — agora %s"
               % (st["janela"],
                  "FORA" if fora_da_janela(st["janela"], st.get("dias")) else "dentro"))
-    produzindo = dur(tempo_de_producao(st))
+    produzindo = decorrido(tempo_de_producao(st))
     if st.get("duracao_max_min"):
         print("produzindo : %s (meta %s — não encerra, ADR-017)"
               % (produzindo, dur(st["duracao_max_min"])))

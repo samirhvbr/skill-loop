@@ -1,6 +1,6 @@
 # Version — skill-LOOP
 
-**Current version:** `0.4.1`
+**Current version:** `0.4.2`
 
 > This file is the **source of truth** for the project's version. Anywhere that
 > needs to display or report the version extracts the **first semver number
@@ -65,6 +65,18 @@ commits of the same delivery repeat the version.
 ---
 
 ## 3. Changelog
+
+### `0.4.2` — 2026-09-18 — A stopwatch showing zero says "menos de 1min", not "esgotado"
+
+Found the moment the EOP was re-armed with no target: the panel read `Tempo
+produzindo há esgotado`. `dur()` formats what **remains**, and its zero means the
+deadline is gone — correct for a countdown, wrong for a stopwatch, where zero is
+the start. `0.4.0` reused it for the new reading and inherited that edge.
+
+`estado.decorrido()` formats elapsed time and reads `menos de 1min` at zero.
+`dur()` is untouched: it is still right for the window and for the target label.
+
+292 tests. Mutation: pointing the stopwatch back at `dur()` drops 1.
 
 ### `0.4.1` — 2026-09-18 — The seeded shortcut stops inventing a 6h target
 

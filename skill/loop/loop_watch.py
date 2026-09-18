@@ -28,8 +28,8 @@ from datetime import datetime
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "lib"))
 
 from diagnostico import condicoes_de_fim, curto          # noqa: E402
-from estado import (NUM_DE_ENTRY, Loop, achar_raiz, dur,   # noqa: E402
-                    minutos_ate_fechar, minutos_desde,
+from estado import (NUM_DE_ENTRY, Loop, achar_raiz, decorrido,   # noqa: E402
+                    dur, minutos_ate_fechar, minutos_desde,
                     objetivo_para_exibir, tempo_de_producao)
 
 # ── cor ─────────────────────────────────────────────────────────────────────
@@ -303,7 +303,7 @@ def render(loop, st, anterior, linhas_tela=None):
     # reading "resta 2h39", which answered "how long before I am cut off" — a
     # question nothing asks any more. What the round has produced is the reading
     # that survived, and it belongs next to the queue, not among the endings.
-    produzido = dur(tempo_de_producao(st))
+    produzido = decorrido(tempo_de_producao(st))
     meta = ("  %s· meta %s%s" % (C.DIM, dur(st["duracao_max_min"]), C.RESET)
             if st.get("duracao_max_min") else "")
     L.append("  Tempo  %sproduzindo há %s%s%s" % (C.NEG, produzido, C.RESET, meta))

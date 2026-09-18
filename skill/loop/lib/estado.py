@@ -214,6 +214,22 @@ def dur(minutos):
     return "%dh%02d" % divmod(m, 60) if m >= 60 else "%dmin" % m
 
 
+def decorrido(minutos):
+    """Minutes elapsed → '3h07' | '24min' | 'menos de 1min' | '—'.
+
+    Deliberately **not** `dur()`. That one formats what REMAINS, where zero means
+    the deadline is gone and reads `esgotado` — correct for a countdown, wrong
+    for a stopwatch, where zero is the start. A round armed one second ago read
+    `produzindo há esgotado` until this function existed (EOP, 18/09).
+    """
+    if minutos is None:
+        return "—"
+    m = int(round(minutos))
+    if m <= 0:
+        return "menos de 1min"
+    return "%dh%02d" % divmod(m, 60) if m >= 60 else "%dmin" % m
+
+
 def tempo_de_producao(st):
     """How long this round has been producing — a stopwatch that counts up.
 

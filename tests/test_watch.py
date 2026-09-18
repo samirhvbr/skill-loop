@@ -130,6 +130,17 @@ class TestRender(unittest.TestCase):
         bloco = texto.split("Fim por")[1].split("Últimas paradas")[0]
         self.assertNotIn("duração máxima", bloco)
 
+    def test_rodada_recem_armada_nao_diz_esgotado(self):
+        # `dur()` formats what REMAINS, so zero reads `esgotado`. Reusing it for
+        # the stopwatch made a round armed seconds ago say `produzindo há
+        # esgotado` — seen on the EOP the moment it was re-armed, 18/09.
+        st = self.loop.ler()
+        st["armado_em"] = datetime.now().astimezone().isoformat(timespec="seconds")
+        texto, _ = self.render(st=st)
+        linha = [l for l in texto.split("\n") if "Tempo" in l][0]
+        self.assertNotIn("esgotado", linha)
+        self.assertIn("menos de 1min", linha)
+
     def test_o_tempo_conta_para_cima_no_cabecalho(self):
         # The inversion itself: a stopwatch, not a countdown. `armado_em` two
         # hours back reads as produced time, with the target alongside it and no
