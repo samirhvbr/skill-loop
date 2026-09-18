@@ -1,6 +1,6 @@
 # Version — skill-LOOP
 
-**Current version:** `0.5.0`
+**Current version:** `0.5.1`
 
 > This file is the **source of truth** for the project's version. Anywhere that
 > needs to display or report the version extracts the **first semver number
@@ -65,6 +65,29 @@ commits of the same delivery repeat the version.
 ---
 
 ## 3. Changelog
+
+### `0.5.1` — 2026-09-18 — A digit instead of a UUID: `armar --escolher-sessao`
+
+The session lock was right and **expensive**. `./.loop/loop.sh` refused without
+an id, so every re-arm meant reading the session list, finding the UUID and
+copying it by hand. Friction that size does not make a lock safer — it pushes
+whoever is in a hurry towards `--qualquer-sessao`, which is exactly the blind
+adoption the lock exists to prevent.
+
+`loop-ctl armar --escolher-sessao` lists the sessions of the repository and asks
+which one drives the round. Each line carries the **config profile**
+(`.claude-blue3`, `.claude-pessoal`, …), because on one machine that is how
+personal work is told from company work, and a list of bare UUIDs made that
+invisible. `./.loop/loop.sh` with no argument now passes it; with an id it still
+skips the question.
+
+**It never guesses.** With no terminal to ask — cron, CI, a pipe — it refuses
+and names the way out. That is the whole difference from the
+`--adotar-primeira-parada` removed in `0.3.15`: the decision stays human, only
+the cost of saying it changed.
+
+306 tests. Mutation: letting it pick the first session when there is no tty drops
+1; making the shortcut pass `--qualquer-sessao` drops 2.
 
 ### `0.5.0` — 2026-09-18 — `- 🔒` is the third box: the item the agent cannot execute
 

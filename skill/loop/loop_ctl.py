@@ -20,6 +20,7 @@ Python 3, stdlib apenas.
 import argparse
 import os
 import sys
+import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "lib"))
 
@@ -30,6 +31,7 @@ from estado import (Loop, PADRAO, achar_raiz, agora,   # noqa: E402
                     objetivo_legivel, objetivo_para_exibir, parse_duracao,
                     tempo_de_producao)
 from sessoes import (JANELA_H as JANELA_SESSOES_H,     # noqa: E402
+                     _idade as idade_de_sessao,
                      formatar as formatar_sessoes, homes,
                      parece_session_id, sessoes_do_repo)
 
@@ -75,6 +77,58 @@ def _raiz(args):
     if args.raiz:
         return os.path.abspath(args.raiz)
     return achar_raiz(os.getcwd()) or os.getcwd()
+
+
+def _escolher_sessao(raiz):
+    """Menu numerado das sessões do repositório. `(id, None)` ou `(None, porque)`.
+
+    Existe porque a trava de `--sessao` estava certa e **cara**: o operador tinha
+    de ler a lista, achar o UUID e copiá-lo à mão a cada rearme. Atrito nesse
+    tamanho não deixa a trava mais segura — ele empurra para `--qualquer-sessao`,
+    que é justamente a adoção cega que a trava existe para impedir.
+
+    ⛔ **Isto não escolhe sozinho, e é essa a diferença para o
+    `--adotar-primeira-parada` que saiu na `0.3.15`.** Sem terminal para
+    perguntar, recusa: a decisão continua sendo de um humano, o que muda é só o
+    custo de dizê-la — um dígito no lugar de um UUID.
+
+    O **perfil** (`~/.claude-blue3`, `~/.claude-pessoal`, …) vai em cada linha
+    porque é por ele que se distingue trabalho pessoal de trabalho da empresa na
+    mesma máquina, e a lista sem ele obrigava a abrir o transcript para saber.
+    """
+    candidatas = sessoes_do_repo(raiz, teto=9)
+    if not candidatas:
+        return None, "nenhuma sessão deste repositório foi encontrada"
+    if not sys.stdin.isatty():
+        return None, "sem terminal para perguntar"
+
+    print("Sessões deste repositório (%s), mais recente primeiro:\n" % raiz)
+    for i, s in enumerate(candidatas, 1):
+        print("  %d) %s  %s  %s" % (i, s["id"],
+                                    idade_de_sessao(time.time() - s["mtime"]),
+                                    os.path.basename(s.get("home", "")) or "?"))
+        abertura = (s.get("abertura") or "").strip().replace("\n", " ")
+        if abertura:
+            print("     %s" % (abertura[:96] + ("…" if len(abertura) > 96 else "")))
+    print()
+    print("⚠️  a recência é a ÚLTIMA ESCRITA no transcript, não prova de processo")
+    print("   vivo. Escolha pela abertura: é ela que distingue a sessão que")
+    print("   trabalha da que está lendo isto.")
+    padrao = 1 if len(candidatas) == 1 else None
+    rotulo = ("Número da sessão [1]: " if padrao else
+              "Número da sessão (1-%d), ou Enter para desistir: " % len(candidatas))
+    try:
+        resposta = input(rotulo).strip()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return None, "escolha interrompida"
+    if not resposta:
+        if padrao:
+            return candidatas[0]["id"], None
+        return None, "nenhum número escolhido"
+    if not resposta.isdigit() or not 1 <= int(resposta) <= len(candidatas):
+        return None, "%r não é um número da lista" % resposta
+    return candidatas[int(resposta) - 1]["id"], None
 
 
 def _semear_atalho(loop):
@@ -170,6 +224,18 @@ def cmd_armar(args):
     # ⛔ **A ORDEM importa e é do dono:** remover o flag ANTES de consertar o
     # molde empurraria todo chamador sem `--sessao` para `--qualquer-sessao`,
     # que não amarra a nada — pior que o estado que se queria consertar.
+    if args.escolher_sessao and not args.sessao and not args.qualquer_sessao:
+        escolhida, porque = _escolher_sessao(loop.raiz)
+        if escolhida is None:
+            print("erro: não deu para escolher a sessão — %s." % porque)
+            print()
+            print("      %s" % ("Rode de um terminal, ou passe `--sessao <id>`."
+                                if porque == "sem terminal para perguntar"
+                                else "Abra uma sessão neste repositório primeiro."))
+            print("      Lista completa:  loop-ctl sessoes --raiz %s" % loop.raiz)
+            return 2
+        args.sessao = escolhida
+
     if not args.qualquer_sessao and not args.sessao:
         print("erro: sem `--sessao`, `bind_session` adota a PRIMEIRA sessão que")
         print("      parar neste repositório — não a que está armando. Qualquer")
@@ -551,6 +617,10 @@ def main(argv=None):
     a.add_argument("--politica", default=PADRAO["politica_ask"],
                    choices=["continuar", "continuar-exceto-irreversivel", "parar"])
     a.add_argument("--sessao", default=None, help="session_id a que o loop se prende")
+    a.add_argument("--escolher-sessao", dest="escolher_sessao",
+                   action="store_true",
+                   help="lista as sessões deste repositório e pergunta qual "
+                        "dirige a rodada; recusa se não houver terminal")
     a.add_argument("--qualquer-sessao", action="store_true",
                    help="não prender a uma sessão (qualquer chat no repo dirige o loop)")
     a.add_argument("--sem-colheita", action="store_true",

@@ -274,3 +274,109 @@ class TestAvisoDoArmar(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestEscolhaAssistida(Base):
+    """`armar --escolher-sessao`: um dígito no lugar de um UUID.
+
+    A trava do `--sessao` estava certa e cara — o operador lia a lista, achava o
+    UUID e copiava à mão a cada rearme. Atrito desse tamanho não torna a trava
+    mais segura: empurra para `--qualquer-sessao`, que é a adoção cega que ela
+    existe para impedir.
+    """
+
+    CTL = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                       "skill", "loop", "loop_ctl.py")
+
+    def fila(self):
+        loop = os.path.join(self.repo, ".loop")
+        os.makedirs(loop, exist_ok=True)
+        with open(os.path.join(loop, "QUEUE.md"), "w", encoding="utf-8") as f:
+            f.write("# Fila\n\n- [ ] fazer alguma coisa\n")
+
+    def armar_em_tty(self, digitado, linhas=40):
+        """Roda `armar --escolher-sessao` num pty e digita a resposta."""
+        import fcntl
+        import pty
+        import struct
+        import termios
+        mestre, escravo = pty.openpty()
+        fcntl.ioctl(escravo, termios.TIOCSWINSZ,
+                    struct.pack("HHHH", linhas, 120, 0, 0))
+        proc = subprocess.Popen(
+            [sys.executable, self.CTL, "armar", "--raiz", self.repo,
+             "--escolher-sessao"],
+            stdin=escravo, stdout=escravo, stderr=escravo, close_fds=True,
+            env=dict(os.environ))
+        time.sleep(0.8)
+        os.write(mestre, digitado.encode())
+        try:
+            proc.wait(timeout=20)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        os.close(escravo)
+        saida = b""
+        try:
+            while True:
+                pedaco = os.read(mestre, 65536)
+                saida += pedaco
+                if len(pedaco) < 65536:
+                    break
+        except OSError:
+            pass
+        os.close(mestre)
+        return proc.returncode, saida.decode("utf-8", "replace")
+
+    def estado(self):
+        with open(os.path.join(self.repo, ".loop", "STATE.json"), encoding="utf-8") as f:
+            return json.load(f)
+
+    def test_sem_terminal_recusa_e_nao_arma(self):
+        # O controle que separa isto do `--adotar-primeira-parada` que saiu na
+        # 0.3.15: sem humano para perguntar, NÃO escolhe. Mutação: deixar cair no
+        # primeiro da lista quando não há tty e esta cai.
+        self.transcript(UUID_A, self.repo, abertura="uma sessão só")
+        self.fila()
+        proc = subprocess.run(
+            [sys.executable, self.CTL, "armar", "--raiz", self.repo,
+             "--escolher-sessao"],
+            capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=30)
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("sem terminal", proc.stdout + proc.stderr)
+        self.assertFalse(os.path.exists(os.path.join(self.repo, ".loop", "STATE.json")))
+
+    def test_uma_sessao_o_enter_aceita(self):
+        self.transcript(UUID_A, self.repo, abertura="Assume o loop e roda")
+        self.fila()
+        rc, saida = self.armar_em_tty("\n")
+        self.assertEqual(rc, 0, saida)
+        self.assertEqual(self.estado()["session_id"], UUID_A)
+
+    def test_duas_sessoes_o_digito_escolhe_a_segunda(self):
+        # A mais recente vem em 1º; digitar 2 tem de amarrar na OUTRA, senão o
+        # menu é decorativo e a escolha do operador não chega.
+        self.transcript(UUID_A, self.repo, abertura="chat aberto para outra coisa")
+        self.transcript(UUID_B, self.repo, abertura="Assume o loop", idade_s=3600)
+        self.fila()
+        rc, saida = self.armar_em_tty("2\n")
+        self.assertEqual(rc, 0, saida)
+        self.assertEqual(self.estado()["session_id"], UUID_B)
+
+    def test_o_menu_mostra_o_perfil_de_cada_sessao(self):
+        # É por ele que se distingue trabalho pessoal de trabalho da empresa na
+        # mesma máquina — sem isso a escolha vira adivinhação entre dois UUIDs.
+        self.transcript(UUID_A, self.repo, abertura="pessoal", config=".claude-pessoal")
+        self.transcript(UUID_B, self.repo, abertura="empresa", config=".claude-blue3",
+                        idade_s=60)
+        self.fila()
+        rc, saida = self.armar_em_tty("1\n")
+        self.assertEqual(rc, 0, saida)
+        self.assertIn(".claude-pessoal", saida)
+        self.assertIn(".claude-blue3", saida)
+
+    def test_numero_invalido_recusa_sem_armar(self):
+        self.transcript(UUID_A, self.repo, abertura="uma só")
+        self.fila()
+        rc, saida = self.armar_em_tty("9\n")
+        self.assertEqual(rc, 2, saida)
+        self.assertFalse(os.path.exists(os.path.join(self.repo, ".loop", "STATE.json")))

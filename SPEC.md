@@ -376,6 +376,13 @@ de dentro da sessão). A **primeira parada** grava o seu — é necessariamente 
 sessão que armou. Depois disso, outra sessão no mesmo repositório é ignorada
 (ADR-008). `--qualquer-sessao` desliga a amarração; e desde 02/09 o `armar` **recusa-se** a adotar por omissão — sem `--sessao`, é preciso dizer `--qualquer-sessao`. ⛔ Eram **três** saídas até a `0.3.15`, quando o `--adotar-primeira-parada` saiu (caixa `A66` do EOP): a `0.3.14` fez o molde `.loop/loop.sh` **exigir** o id, e o flag ficou sem chamador legítimo. A adoção continua existindo; ela deixou de ser herdada em silêncio.
 
+`armar --escolher-sessao` lista as sessões do repositório e pergunta qual dirige
+a rodada — um dígito no lugar de um UUID, com o **perfil de configuração** de
+cada uma (`.claude-blue3`, `.claude-pessoal`, …), que é como se distingue
+trabalho pessoal de trabalho da empresa na mesma máquina. Sem terminal para
+perguntar, **recusa**: a decisão continua humana, o que mudou foi o custo de
+dizê-la.
+
 `retomar` **limpa** o `session_id` (a menos que `--sessao` venha explícito): quem
 retoma quase sempre retoma no dia seguinte, em sessão nova, e manter o id da
 rodada anterior fazia o hook sair em silêncio no portão da sessão. `retomar`

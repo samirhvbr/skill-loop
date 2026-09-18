@@ -56,10 +56,10 @@ O que **existe e roda** (`0.1.0`, 16/08/2026):
 - `skill/loop/templates/loop.sh` — o atalho que `armar` semeia em
   `.loop/loop.sh` do repositório alvo: `./.loop/loop.sh [6h]` rearma e abre
   o painel, com a raiz derivada e sem sobrescrever a cópia do dono (ADR-016).
-- **301 testes**, controles verificados por mutação.
+- **306 testes**, controles verificados por mutação.
 
 ```bash
-python3 -m unittest discover -s tests -v      # 301 testes, sem modelo, sem rede
+python3 -m unittest discover -s tests -v      # 306 testes, sem modelo, sem rede
 ./install.sh --dry-run                        # mostra o que faria
 loop-watch --uma-vez --raiz <repo>            # uma leitura do acompanhamento
 ```
@@ -139,7 +139,8 @@ mensagens vagas.
     substituído na exibição pela mesma régua (`estado.objetivo_legivel`). O
     número de uma parada vem do **nome do arquivo**, nunca da iteração.
 14. A adoção de sessão é **pedida, nunca herdada**: sem `--sessao`, `armar`
-    recusa e nomeia as **duas** saídas (`--sessao <id>`, `--qualquer-sessao`) —
+    recusa e nomeia as saídas (`--sessao <id>`, `--escolher-sessao` que lista e
+    pergunta, `--qualquer-sessao`) —
     emenda do ADR-008, custo medido na P-09. ⛔ **O
     `--adotar-primeira-parada` saiu na `0.3.15`** (caixa `A66` do EOP), depois
     de a `0.3.14` fazer o molde `.loop/loop.sh` **exigir** o id: o flag existia

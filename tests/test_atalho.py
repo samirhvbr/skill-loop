@@ -223,36 +223,49 @@ class TestExecucao(Base):
     # A adoção silenciosa é o defeito da `P-09` — 18 entradas de diário em itens
     # alheios em 01/09, e três reincidências numa rodada só em 10/09.
 
-    def test_ACUSA_sem_id_o_atalho_RECUSA_e_nao_chama_o_armar(self):
+    def test_ACUSA_sem_id_o_atalho_PERGUNTA_e_nunca_adota_cego(self):
+        # Era recusa até a `0.5.1`, e a recusa estava certa e cara: o operador
+        # lia a lista, achava o UUID e copiava à mão a cada rearme. Agora o
+        # atalho delega a pergunta ao `loop-ctl --escolher-sessao`, que lista as
+        # sessões e pede um dígito — e que recusa sozinho quando não há terminal
+        # para perguntar (provado em tests/test_sessoes.py).
+        #
+        # ⚠️ O que este teste cobra continua sendo o mesmo: o atalho **nunca**
+        # pode escolher o vínculo por conta própria. `--qualquer-sessao` aqui
+        # seria a adoção cega da P-09 com outro nome.
         proc = self.rodar(com_sessao=False)
-        self.assertEqual(proc.returncode, 1,
-                         "armou sem vínculo de sessão — o defeito da P-09")
-        # ⚠️ A asserção é sobre o VERBO, não sobre o `loop-ctl` ter sido tocado.
-        # Até a `0.3.15` ela era `assertIsNone(argv(log_ctl))`, e aquilo era um
-        # PROXY: valia enquanto a recusa não chamava nada. Desde a `0.3.16` ela
-        # chama `loop-ctl sessoes` para imprimir os candidatos — leitura pura,
-        # que não arma coisa alguma. Manter o proxy proibiria a recusa de
-        # ajudar; o que nunca pode acontecer é `armar`, e é isso que se cobra.
         ctl = self.argv(self.log_ctl)
-        if ctl is not None:
-            self.assertNotEqual(ctl[0], "armar",
-                                "chamou o `armar` mesmo recusando")
+        self.assertIsNotNone(ctl, "não chamou o armar: %s" % proc.stderr)
+        self.assertEqual(ctl[0], "armar")
+        self.assertIn("--escolher-sessao", ctl)
+        self.assertNotIn("--qualquer-sessao", ctl,
+                         "o atalho adotou qualquer sessão sozinho — a P-09")
+        self.assertNotIn("--sessao", ctl, "inventou um id")
+
+    def _watch_nao_roda_na_recusa(self):
         self.assertIsNone(self.argv(self.log_watch),
                           "abriu painel de rodada que não foi armada")
 
-    def test_ACUSA_a_recusa_DIZ_por_que_e_como_sair_dela(self):
-        proc = self.rodar(com_sessao=False)
-        for pedaco in ("--sessao", "LOOP_SESSAO", "--qualquer-sessao"):
-            self.assertIn(pedaco, proc.stderr,
-                          "a recusa não nomeia `%s` — recusa sem saída vira "
-                          "`--force` na semana seguinte" % pedaco)
+    def test_ACUSA_as_saidas_seguem_escritas_no_atalho(self):
+        # A pergunta substituiu a recusa, não a documentação: quem abre o arquivo
+        # tem de achar as duas saídas e o motivo de elas existirem. Recusa (ou
+        # pergunta) sem saída nomeada vira `--force` na semana seguinte.
+        with open(self.atalho, encoding="utf-8") as f:
+            texto = f.read()
+        for pedaco in ("--sessao", "LOOP_SESSAO", "--qualquer-sessao",
+                       "--escolher-sessao"):
+            self.assertIn(pedaco, texto)
 
     def test_ACUSA_duracao_sozinha_nao_e_confundida_com_id(self):
-        # `10h` não tem forma de session_id: o script tem de recusar, e não
-        # tomar a duração como vínculo
-        proc = self.rodar("10h", com_sessao=False)
-        self.assertEqual(proc.returncode, 1,
-                         "tomou `10h` como id de sessão")
+        # `10h` não tem forma de session_id. Antes da `0.5.1` isso era recusa;
+        # agora o atalho segue e pergunta a sessão — mas `10h` tem de chegar como
+        # DURAÇÃO, nunca como vínculo, que era o defeito de 11/09.
+        self.rodar("10h", com_sessao=False)
+        ctl = self.argv(self.log_ctl)
+        self.assertIsNotNone(ctl)
+        self.assertEqual(ctl[ctl.index("--duracao") + 1], "10h")
+        self.assertIn("--escolher-sessao", ctl)
+        self.assertNotIn("--sessao", ctl, "tomou `10h` como id de sessão")
 
     # ═════════ 0.3.16 — o argumento que não é nada é NOMEADO ═════════
     #
