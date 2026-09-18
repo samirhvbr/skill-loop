@@ -19,7 +19,8 @@ rodada morrer por veredito em vez de fabricar trabalho.
 -->
 [LOOP-WORK · iteração {iteracao}/{max_iteracoes} · REABASTECIMENTO · sua última mensagem foi arquivada como {kind} em {entry}]
 
-**Ninguém está lendo o chat agora.** A fila zerou — {feitos} item(ns) fechado(s) —
+**Ninguém está lendo o chat agora.** A fila zerou — {feitos} item(ns) fechado(s);
+itens `- 🔒` não contam, eles estão na mesa do dono esperando decisão dele —
 e a rodada continua: **{restante_relogio}**. Fila vazia aqui não é fim, é o
 gatilho deste turno, e o seu trabalho agora é **encher a fila de novo**.
 

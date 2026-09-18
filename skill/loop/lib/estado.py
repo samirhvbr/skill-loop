@@ -392,6 +392,12 @@ class Loop(object):
     # ── fila ────────────────────────────────────────────────────────────────
     _PEND = re.compile(r"^(\s*)- \[ \]\s+(.+?)\s*$")
     _FEITO = re.compile(r"^(\s*)- \[[xX]\]\s+(.+?)\s*$")
+    # Nem pendente nem feito: está na mesa do dono, esperando uma decisão que o
+    # agente não pode tomar. Caixa nenhuma serve — `[ ]` devolve o item à cabeça
+    # da fila para sempre, e `[x]` mente que foi entregue. A notação nasceu no
+    # EOP em 18/09/2026, onde o dono já escrevia 🔒 nessas linhas à mão: a skill
+    # aprende a ler o que o repositório já dizia, em vez de impor símbolo novo.
+    _BLOQUEADO = re.compile(r"^(\s*)- 🔒\s+(.+?)\s*$")
     _PROVENIENCIA = re.compile(r"\s*<!--.*?-->\s*")
 
     @classmethod
@@ -427,6 +433,17 @@ class Loop(object):
             elif self._FEITO.match(l):
                 feitos += 1
         return pend, feitos
+
+    def bloqueados(self):
+        """Quantos itens estão `- 🔒` — fora da fila de execução, na mesa do dono.
+
+        Contados à parte de propósito: eles não são trabalho a fazer (o agente
+        não pode), nem trabalho feito. Some-los a qualquer um dos dois apagaria a
+        única pergunta que importa sobre eles — *quantas decisões estão me
+        esperando*. O painel e o `status` mostram; nenhum cálculo de progresso os
+        usa.
+        """
+        return sum(1 for l in self._linhas_fila() if self._BLOQUEADO.match(l))
 
     def proximo_item(self):
         for l in self._linhas_fila():

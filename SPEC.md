@@ -204,6 +204,12 @@ progresso`: o teto de degeneração manda em tudo que o agente escreve, inclusiv
 veredito dele. `armar` apaga o arquivo; `retomar` não, e `porque` avisa que ele
 está lá.
 
+**Três estados na fila** (ADR-018). `- [ ]` pendente, `- [x]` feito, e `- 🔒`
+**aguardando decisão do dono** — trabalho que existe, não está entregue, e que o
+agente não pode executar. O seletor pula o `🔒`, ele não entra em contagem de
+progresso nenhuma, e uma fila só com `🔒` conta como **zerada** (logo: turno de
+reabastecimento). `loop-ctl` e o painel imprimem quantos são, ao lado da fila.
+
 **Progresso** = sha1 de `git status --porcelain -- ':(exclude).loop'` + `HEAD` +
 contagem da fila. Duas paradas com a mesma impressão significam agente falando
 sem produzir. Fora de repositório git, a fila responde sozinha.
@@ -303,7 +309,7 @@ quando o reabastecimento precisa de instrução mais específica que a do templa
 ```
 .loop/
 ├── STATE.json        estado do ciclo
-├── QUEUE.md          a fila — `- [ ]` / `- [x]`
+├── QUEUE.md          a fila — `- [ ]` / `- [x]` / `- 🔒` (ADR-018)
 ├── INDEX.md          uma linha por parada
 ├── ASSUMPTIONS.md    premissas adotadas para não parar
 ├── STATUS.md         por que encerrou (só no fim)

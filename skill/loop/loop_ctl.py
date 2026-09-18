@@ -59,6 +59,18 @@ Fila vazia = o loop encerra. É o critério de pronto do ciclo inteiro.
 """
 
 
+def _sufixo_bloqueadas(loop):
+    """`" · 14 🔒 na mesa do dono"` — ou nada quando não há.
+
+    Sai junto da contagem da fila em todo lugar que a imprime: um item `- 🔒`
+    some das duas contagens de propósito, e uma fila que lê "0 pendente(s)"
+    escondendo 14 decisões suas seria a mesma mentira por omissão que o painel
+    de 17/08 contava.
+    """
+    n = loop.bloqueados()
+    return (" · %d 🔒 na mesa do dono" % n) if n else ""
+
+
 def _raiz(args):
     if args.raiz:
         return os.path.abspath(args.raiz)
@@ -226,7 +238,8 @@ def cmd_armar(args):
     pend, feitos = loop.contagem_fila()
     print("loop armado em %s" % loop.dir)
     print("  objetivo   : %s" % objetivo_para_exibir(st["objetivo"]))
-    print("  fila       : %d pendente(s), %d feito(s)" % (pend, feitos))
+    print("  fila       : %d pendente(s), %d feito(s)%s"
+          % (pend, feitos, _sufixo_bloqueadas(loop)))
     print("  fim por    : %s" % _fim_por(st, pend))
     print("  teto       : %d iterações · %d paradas sem progresso"
           % (st["max_iteracoes"], st["max_sem_progresso"]))
@@ -285,7 +298,8 @@ def cmd_status(args):
     print("ativo      : %s (fase %s)" % (st.get("ativo"), st.get("fase")))
     print("objetivo   : %s" % objetivo_para_exibir(st.get("objetivo")))
     print("iteração   : %d / %d" % (st.get("iteracao", 0), st.get("max_iteracoes", 0)))
-    print("fila       : %d pendente(s), %d feito(s)" % (pend, feitos))
+    print("fila       : %d pendente(s), %d feito(s)%s"
+          % (pend, feitos, _sufixo_bloqueadas(loop)))
     print("próximo    : %s" % (loop.proximo_item() or "—"))
     print("sem prog.  : %d / %d" % (st.get("sem_progresso", 0),
                                     st.get("max_sem_progresso", 0)))
@@ -376,7 +390,8 @@ def cmd_porque(args):
         return 1
 
     pend, feitos = loop.contagem_fila()
-    print("  · %-15s %d pendente(s), %d feito(s)" % ("fila", pend, feitos))
+    print("  · %-15s %d pendente(s), %d feito(s)%s"
+          % ("fila", pend, feitos, _sufixo_bloqueadas(loop)))
     print("  · %-15s %s" % ("próximo", loop.proximo_item() or "—"))
     print("  · %-15s %s" % ("fim por", _fim_por(st, pend)))
 
@@ -462,7 +477,8 @@ def cmd_retomar(args):
 def cmd_fila(args):
     loop = Loop(_raiz(args))
     pend, feitos = loop.contagem_fila()
-    print("%d pendente(s), %d feito(s)" % (pend, feitos))
+    print("%d pendente(s), %d feito(s)%s"
+          % (pend, feitos, _sufixo_bloqueadas(loop)))
     print("próximo: %s" % (loop.proximo_item() or "—"))
     return 0
 

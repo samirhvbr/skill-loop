@@ -312,7 +312,7 @@ havia uma linha de log sobre nenhum deles.
 ```
 .loop/
 ├── STATE.json        estado do ciclo
-├── QUEUE.md          a fila — e o progresso medido
+├── QUEUE.md          a fila — `- [ ]` / `- [x]` / `- 🔒` (mesa do dono)
 ├── INDEX.md          uma linha por parada
 ├── ASSUMPTIONS.md    o que foi decidido sem você      ← leia primeiro
 ├── STATUS.md         por que encerrou

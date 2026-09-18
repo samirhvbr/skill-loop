@@ -1,6 +1,6 @@
 # Version — skill-LOOP
 
-**Current version:** `0.4.3`
+**Current version:** `0.5.0`
 
 > This file is the **source of truth** for the project's version. Anywhere that
 > needs to display or report the version extracts the **first semver number
@@ -65,6 +65,42 @@ commits of the same delivery repeat the version.
 ---
 
 ## 3. Changelog
+
+### `0.5.0` — 2026-09-18 — `- 🔒` is the third box: the item the agent cannot execute
+
+A `Y` bump: the `QUEUE.md` format gains a state ([ADR-018](docs/decisoes.md)).
+
+On the EOP, all 14 pending items were owner boxes — money, contract, ADR,
+authentication. `proximo_item()` returns the head of the queue, so the same box
+came back at every stop: **25 iterations on `L781`**, ~31 identical diary
+entries, and what ended each session was the harness ceiling of consecutive
+blocks, not the loop.
+
+Neither existing box could say it. `- [ ]` puts the item back at the head
+forever; `- [x]` claims it was delivered, and the queue is the measurement of
+what is done. So there is a third: `- 🔒`, *waiting on a decision only the owner
+can make*. The selector skips it, no progress calculation sees it, a queue with
+only locked items counts as **empty** — which makes the stop a refuelling turn,
+so the agent goes looking for work instead of receiving the same box again — and
+`loop-ctl` and the panel print `14 🔒 na mesa do dono` next to the queue counts,
+because an item that vanishes from both counts and is shown nowhere is the same
+lie by omission the panel of 17/08 told.
+
+The agent marks it himself, in the turn he finds out (clause 5 of
+`prompts/continuacao.md`). Depending on an owner decision is explicitly **not** a
+reason to end the turn — it is a reason to mark and move on.
+
+**The symbol was not invented here.** The EOP already wrote `🔒` and `CAIXA DO
+DONO` on those lines by hand, long before the skill could read anything. A
+convention that already exists on disk does not need to be adopted, only
+recognised.
+
+Older `.loop/` copies are unaffected: a queue with no `- 🔒` behaves exactly as
+before and `bloqueados()` returns 0.
+
+301 tests. Mutation: removing `_BLOQUEADO` drops 1; deleting clause 5 from the
+prompt drops 1 — and that second test had to be tightened first, because
+asserting on the symbol alone passed even with the instruction deleted.
 
 ### `0.4.3` — 2026-09-18 — The brake could never fire: the hook counted its own trail as progress
 

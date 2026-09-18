@@ -954,3 +954,63 @@ class TestFreioEmRepoGit(Base):
             f.write(FILA.replace("- [ ] 3.1", "- [x] 3.1"))
         self.rodar(DOC)
         self.assertEqual(self.loop.ler()["sem_progresso"], 0)
+
+
+class TestItemBloqueado(Base):
+    """`- 🔒`: o item que o agente não pode executar sai da fila de execução.
+
+    Nasceu do EOP em 18/09/2026, onde 14 de 14 pendentes eram caixa do dono. O
+    seletor devolve sempre a cabeça da fila, então o mesmo item voltava a cada
+    parada — 25 iterações na mesma caixa. Caixa nenhuma servia: `[ ]` devolve o
+    item para sempre, `[x]` mente que foi entregue.
+    """
+
+    FILA_MISTA = (
+        "# Fila\n\n"
+        "- 🔒 **L781 · CAIXA DO DONO · decisão de contrato**\n"
+        "- [ ] 3.1 Converter as observações do Billing\n"
+        "- [x] 2.9 Já feito antes do loop\n"
+    )
+
+    def fila_mista(self):
+        with open(self.loop.p("QUEUE.md"), "w", encoding="utf-8") as f:
+            f.write(self.FILA_MISTA)
+
+    def test_bloqueado_nao_e_pendente_nem_feito(self):
+        # Mutação: apagar `_BLOQUEADO` e o item vira invisível — a contagem some
+        # e o painel passa a esconder as decisões represadas.
+        self.fila_mista()
+        pend, feitos = self.loop.contagem_fila()
+        self.assertEqual((pend, feitos), (1, 1))
+        self.assertEqual(self.loop.bloqueados(), 1)
+
+    def test_o_seletor_pula_o_bloqueado(self):
+        # O defeito medido: a cabeça da fila era caixa do dono e voltava sempre.
+        self.fila_mista()
+        self.assertIn("Billing", self.loop.proximo_item())
+
+    def test_fila_so_com_bloqueados_conta_como_zerada(self):
+        # E aí a parada vira turno de reabastecimento, não giro: o agente vai
+        # buscar trabalho novo em vez de receber o mesmo item pela 26ª vez.
+        with open(self.loop.p("QUEUE.md"), "w", encoding="utf-8") as f:
+            f.write("# Fila\n\n- 🔒 **L781 · CAIXA DO DONO**\n- [x] 2.9 feito\n")
+        self.armar()
+        self.assertEqual(self.loop.contagem_fila()[0], 0)
+        _, saida = self.rodar(DOC)
+        self.assertIn("REABASTECIMENTO", saida["reason"])
+        self.assertNotIn("ENCERROU", saida["reason"])
+
+    def test_o_prompt_ensina_a_marcar_o_bloqueado(self):
+        # Sem isto o agente não sabe que a saída existe, e a notação não serve
+        # de nada: quem marca é ele, no turno em que descobre que não pode.
+        self.fila_mista()
+        self.armar()
+        _, saida = self.rodar(DOC)
+        razao = saida["reason"]
+        # Asserting on `🔒` alone was not enough: the symbol also appears in the
+        # "fila zerou" clause, so the instruction could be deleted and the test
+        # still passed. The mutation caught that, so the assertion is now on the
+        # two halves of the instruction itself — mark it, and keep going.
+        self.assertIn("troque o `- [ ]` dele por `- 🔒`", razao)
+        self.assertIn("siga para o próximo item pendente", razao)
+        self.assertIn("não é encerramento", razao.lower().replace("não é desistência", ""))

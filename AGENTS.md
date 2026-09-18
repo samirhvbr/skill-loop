@@ -3,7 +3,7 @@
 > **Leia também:** [README_br.md](README_br.md) (o produto, canônico) ·
 > [SECURITY.md](SECURITY.md) (**leitura obrigatória** — modelo de ameaça) ·
 > [SPEC.md](SPEC.md) (pipeline normativo e formato do `.loop/`) ·
-> [docs/decisoes.md](docs/decisoes.md) (ADR-001 a ADR-017 + pendências) ·
+> [docs/decisoes.md](docs/decisoes.md) (ADR-001 a ADR-018 + pendências) ·
 > [prompts/continuacao.md](prompts/continuacao.md) (o prompt do produto) ·
 > [version.md](version.md) (versão + formato de commit).
 >
@@ -56,10 +56,10 @@ O que **existe e roda** (`0.1.0`, 16/08/2026):
 - `skill/loop/templates/loop.sh` — o atalho que `armar` semeia em
   `.loop/loop.sh` do repositório alvo: `./.loop/loop.sh [6h]` rearma e abre
   o painel, com a raiz derivada e sem sobrescrever a cópia do dono (ADR-016).
-- **297 testes**, controles verificados por mutação.
+- **301 testes**, controles verificados por mutação.
 
 ```bash
-python3 -m unittest discover -s tests -v      # 297 testes, sem modelo, sem rede
+python3 -m unittest discover -s tests -v      # 301 testes, sem modelo, sem rede
 ./install.sh --dry-run                        # mostra o que faria
 loop-watch --uma-vez --raiz <repo>            # uma leitura do acompanhamento
 ```
@@ -112,6 +112,8 @@ mensagens vagas.
    detectada nunca vira item de fila**, nos dois vereditos (ADR-005 + emenda de
    17/08: um `- [x]` numa pergunta zera a fila e encerra a rodada).
 6. `QUEUE.md` é a fonte do próximo passo — não a todo list nativa (ADR-006).
+   Três estados: `- [ ]`, `- [x]` e **`- 🔒`** (aguardando decisão do dono), que o
+   seletor pula e nenhuma conta de progresso vê (ADR-018).
 7. Hook global, opt-in por `.loop/`, em grupo próprio no `settings.json`
    (ADR-007).
 8. Amarração à sessão por auto-bind na primeira parada — e `retomar` **limpa** o

@@ -645,6 +645,52 @@ ADR. Decisão nova entra aqui, com data e status, no mesmo commit da mudança.
 
 ---
 
+## ADR-018 — `- 🔒` é a terceira caixa: o item que o agente não pode executar
+
+- **Date:** 2026-09-18 · **Status:** Accepted · **Extends:** ADR-006 (the queue
+  is the source of the next step)
+- **Observed fact.** On the EOP, 18/09: all 14 pending items were owner boxes —
+  money, contract, ADR, authentication. `proximo_item()` returns the head of the
+  queue, so the same box came back at every stop. The round spun **25
+  iterations** on `L781`, wrote ~31 identical diary entries, and what ended each
+  session was the harness ceiling of consecutive blocks, not the loop.
+- **Neither existing box works.** `- [ ]` puts the item back at the head forever.
+  `- [x]` would say it was delivered, which is a lie — and the queue is the
+  measurement of what is done. There was no way to say *"this is work, it is not
+  finished, and I cannot be the one to do it"*.
+- **Decision.** A third state, `- 🔒`, meaning **waiting on a decision only the
+  owner can make**. It is counted apart from both — `bloqueados()` — and enters
+  no progress calculation. Four consequences, each implemented:
+  1. **The selector skips it.** `- 🔒` does not match `_PEND`, so the head of the
+     queue moves on to the next executable item.
+  2. **A queue with only locked items counts as empty**, which makes the stop a
+     refuelling turn: the agent goes looking for new work instead of receiving
+     the same box for the 26th time.
+  3. **The agent marks it himself**, in the turn he finds out — clause 5 of
+     `prompts/continuacao.md`. Depending on an owner decision is explicitly *not*
+     a reason to end the turn: it is a reason to mark and move on.
+  4. **It is always visible.** `loop-ctl` and the panel print
+     `14 🔒 na mesa do dono` next to the queue counts. An item that vanishes from
+     both counts and is shown nowhere would be the same lie by omission the
+     panel of 17/08 told.
+- **Why this symbol.** It was not invented here. The EOP already wrote `🔒` and
+  `CAIXA DO DONO` on those lines by hand, for months, before the skill could read
+  anything. The notation was chosen so that the skill learns to read what the
+  repository was already saying — a convention that exists on disk does not need
+  to be adopted, only recognised.
+- **Consequences.** The `QUEUE.md` format gains a state, which is why this is a
+  `Y` bump. Older `.loop/` copies are unaffected: a queue with no `- 🔒` behaves
+  exactly as before, and `bloqueados()` returns 0. What the loop still cannot do
+  is decide *for* the owner — when every remaining item is locked and there is no
+  scope left to refuel, the round ends by the agent's `SEM-ESCOPO` verdict, and
+  the boxes wait on the desk.
+- **Mutation.** Removing `_BLOQUEADO` drops 1 (the item stops being counted and
+  the desk goes invisible); deleting clause 5 from the continuation prompt drops
+  1 — and that second test had to be tightened first, because asserting on the
+  symbol alone passed even with the instruction deleted.
+
+---
+
 ## Pendências
 
 | # | Pendência | Estado |

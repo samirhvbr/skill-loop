@@ -78,13 +78,16 @@ já foi arquivado em {entry} e ninguém está lendo o chat agora.
 Item atual da fila (.loop/QUEUE.md): {item}
 
 {bloco_ask}Execute o item até o fim, marque `- [x]` no QUEUE.md e siga direto para o
-próximo, sem pedir confirmação. Só encerre se a fila zerar, se existir
-`.loop/STOP`, ou se a próxima ação for destrutiva/irreversível.
+próximo, sem pedir confirmação. Se o item depender de uma decisão que só o dono
+pode tomar, troque o `- [ ]` dele por `- 🔒`, registre a pergunta em uma linha e
+siga para o próximo — não encerre por isso. Só encerre se a fila zerar, se
+existir `.loop/STOP`, ou se a próxima ação for destrutiva/irreversível.
 """
 
 FALLBACK_REABASTECIMENTO = """[LOOP-WORK · iteração {iteracao} · REABASTECIMENTO]
-A fila zerou ({feitos} feito(s)) e ainda há {restante_relogio} de rodada. Ninguém
-está lendo o chat: seu trabalho neste turno é **encher a fila de novo**.
+A fila zerou ({feitos} feito(s)) — itens `- 🔒` não contam, eles estão na mesa do
+dono — e a rodada continua ({restante_relogio}). Ninguém está lendo o chat: seu
+trabalho neste turno é **encher a fila de novo**.
 
 Objetivo: {objetivo}
 Escopo: {escopo}

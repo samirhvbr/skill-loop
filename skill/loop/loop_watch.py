@@ -183,6 +183,13 @@ def condicoes(loop, st, pendentes, feitos):
     # know about the queue; what it must not do is look like an end condition.
     linhas.append((None, "fila (não encerra)",
                    "%d pendente(s) → reabastece" % pendentes, None))
+    # `- 🔒` some das duas contagens por desenho, então a fila pode ler
+    # "0 pendente(s)" com uma pilha de decisões esperando o dono. A linha só
+    # aparece quando há alguma: painel que mostra zero não é informação.
+    travadas = loop.bloqueados()
+    if travadas:
+        linhas.append((None, "🔒 mesa do dono",
+                       "%d aguardando decisão sua" % travadas, None))
     if st.get("janela"):
         falta = minutos_ate_fechar(st["janela"], st.get("dias"))
         rot = "janela %s%s" % (st["janela"],

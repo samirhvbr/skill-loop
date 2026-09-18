@@ -282,7 +282,7 @@ was not one line of log about any of them.
 ```
 .loop/
 ├── STATE.json        run state
-├── QUEUE.md          the queue — and measured progress
+├── QUEUE.md          the queue — `- [ ]` / `- [x]` / `- 🔒` (owner's desk)
 ├── INDEX.md          one row per stop
 ├── ASSUMPTIONS.md    what was decided without you      ← read this first
 ├── STATUS.md         why it ended

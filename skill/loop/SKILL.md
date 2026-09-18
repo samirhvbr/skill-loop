@@ -92,6 +92,9 @@ Antes de armar:
    - **Verificável.** O item precisa ter um fim reconhecível, senão o agente
      nunca marca `- [x]` e o loop não mede progresso.
    - **Ordenada por dependência.** O hook entrega sempre o primeiro `- [ ]`.
+   - **O que depende de decisão do dono vai como `- 🔒`, não `- [ ]`** (ADR-018):
+     dinheiro, contrato, ADR, autenticação, ato irreversível. `- [ ]` devolveria
+     o item à cabeça da fila a cada parada, para sempre.
    - Trabalho já feito entra como `- [x]` — dá denominador ao progresso.
 
 4. Mostre a fila ao usuário antes de armar. É a última chance barata de
@@ -166,6 +169,9 @@ armado:
   alternativa descartada · como reverter) e siga.
 - **Marque `- [x]`** ao concluir um item, no mesmo turno, antes de seguir.
 - **Trabalho novo vira item**, não pergunta: acrescente `- [ ]` na fila.
+- **Item que depende de decisão do dono vira `- 🔒`** e você segue para o
+  próximo, no mesmo turno (ADR-018). Não é encerrar: é tirar da fila de execução
+  o que não é executável por você. `- [x]` ali mentiria.
 - **Encerre de verdade** só se existir `.loop/STOP`, se a próxima ação for
   destrutiva/irreversível sem premissa que a cubra, ou se você estiver bloqueado
   por algo fora do seu alcance (credencial, serviço fora do ar). Fila vazia não

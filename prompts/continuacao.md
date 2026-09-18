@@ -30,15 +30,29 @@ perdido: siga produzindo.
 3. Vá **direto** para o próximo item pendente, no mesmo turno, sem me avisar.
 4. Se descobrir trabalho novo necessário, acrescente-o como `- [ ]` na fila em
    vez de me perguntar se deve fazer.
+5. **Se o item atual depende de uma decisão que só eu posso tomar** — dinheiro,
+   contrato, ADR, autenticação, ato irreversível, ou qualquer pergunta aberta
+   endereçada a mim —, troque o `- [ ]` dele por `- 🔒` no `.loop/QUEUE.md`,
+   registre a pergunta em uma linha, e **siga para o próximo item pendente no
+   mesmo turno**. Não é encerramento e não é desistência: é tirar da fila de
+   execução o que não é executável por você. `- [x]` ali seria mentira, e
+   deixar `- [ ]` devolve o mesmo item à sua frente na próxima parada, para
+   sempre.
 
 **Só encerre o turno de verdade se** uma destas for verdade:
 
-- a fila zerou (nenhum `- [ ]` restante);
+- a fila zerou (nenhum `- [ ]` restante — itens `- 🔒` não contam, eles já
+  saíram da fila de execução);
 - existe o arquivo `.loop/STOP`;
 - a próxima ação é **destrutiva ou irreversível** e não está coberta por uma
   premissa já registrada (apagar dados, migração sem volta, push forçado,
   gastar dinheiro, mexer em produção, mandar mensagem para terceiro);
 - você está **tecnicamente bloqueado** por algo fora do seu alcance (credencial
   ausente, serviço fora do ar) — e aí diga exatamente o que falta, em uma linha.
+
+⚠️ **Depender de decisão minha não é motivo para encerrar** — é motivo para
+marcar `- 🔒` e seguir (item 5). Encerrar ali gasta a parada sem tirar o item da
+frente, e a parada seguinte recebe o mesmo item: foi assim que uma rodada no EOP
+girou 25 vezes na mesma caixa em 18/09/2026.
 
 Objetivo do loop: {objetivo}
