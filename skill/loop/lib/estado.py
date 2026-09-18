@@ -636,10 +636,27 @@ class Loop(object):
         Sem git (ou fora de repo), a fila sozinha responde. Duas paradas com a
         mesma impressão = o agente falou e não moveu nada — é o sinal de loop
         degenerado, o modo de falha que mais custa caro aqui.
+
+        ⛔ `.loop/` fica **fora** do `--porcelain`, e sem isso o freio nunca
+        dispara. O hook grava a entry, o `INDEX.md` e o `STATE.json` a cada
+        parada, e a impressão é calculada ANTES de a entry ser escrita
+        (`loop-stop.py`): a impressão da parada N carregava o rastro da N−1, duas
+        paradas consecutivas nunca coincidiam e `sem_progresso` voltava a zero
+        sempre. Medido no EOP em 18/09/2026 — 16 iterações na mesma caixa do
+        dono com `sem_progresso: 0`, e quem encerrou foi o teto de bloqueios do
+        harness, não o freio.
+
+        A forma do defeito é a cara: o hook escrevia a evidência de que o agente
+        estava parado, e era essa evidência que dizia ao loop que ele tinha se
+        movido. Guarda que se absolve com o próprio relatório.
+
+        A fila **não** sai junto: ela entra por `pend`/`feitos`, medidos aqui,
+        então marcar `- [x]` ou enfileirar item novo segue contando — e commit
+        segue contando pelo `HEAD`.
         """
         pend, feitos = self.contagem_fila()
         material = "|".join([
-            self._git("status", "--porcelain"),
+            self._git("status", "--porcelain", "--", ":(exclude).loop"),
             self._git("rev-parse", "HEAD").strip(),
             str(pend), str(feitos),
         ])

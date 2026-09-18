@@ -865,3 +865,92 @@ class TestArmarNaoAdotaSessaoPorOmissao(Base):
         st = self.loop.ler()
         self.assertFalse(st["bind_session"])
         self.assertIn("não amarra", saida)
+
+
+class TestFreioEmRepoGit(Base):
+    """The brake, measured inside a real git repository.
+
+    The rest of this suite runs in a bare tmpdir, so `_git` returns "" and the
+    imprint reduces to the queue counts — the one arrangement where the defect
+    of 18/09 could not appear. That is exactly how it survived: `sem_progresso`
+    had tests for the FIELD (set it to 3, assert the round ends) and none for the
+    MECHANISM that feeds it.
+    """
+
+    def setUp(self):
+        super().setUp()
+        for cmd in (["git", "init", "-q", "-b", "master"],
+                    ["git", "config", "user.email", "t@t.t"],
+                    ["git", "config", "user.name", "t"]):
+            subprocess.run(cmd, cwd=self.tmp, check=True, capture_output=True)
+        with open(os.path.join(self.tmp, "README.md"), "w", encoding="utf-8") as f:
+            f.write("# alvo\n")
+        subprocess.run(["git", "add", "-A"], cwd=self.tmp, check=True,
+                       capture_output=True)
+        subprocess.run(["git", "commit", "-qm", "base"], cwd=self.tmp, check=True,
+                       capture_output=True)
+
+    def test_o_freio_conta_paradas_sem_producao(self):
+        # The defect: the hook writes the entry, INDEX.md and STATE.json on every
+        # stop, and the imprint is taken BEFORE the entry is written — so stop N
+        # carried stop N-1's trail and no two stops ever matched. Measured on the
+        # EOP on 18/09: 16 iterations on one owner box with `sem_progresso: 0`.
+        # Mutation: drop `:(exclude).loop` from `impressao()` and this falls.
+        self.armar()
+        self.rodar(DOC)
+        self.assertEqual(self.loop.ler()["sem_progresso"], 0,
+                         "a primeira parada não tem com o que comparar")
+        self.rodar(DOC)
+        self.assertEqual(self.loop.ler()["sem_progresso"], 1)
+        self.rodar(DOC)
+        self.assertEqual(self.loop.ler()["sem_progresso"], 2)
+
+    def test_o_freio_encerra_a_rodada_no_teto(self):
+        # End to end: the brake does what it exists for, inside a git repo.
+        self.armar(max_sem_progresso=3)
+        for _ in range(3):
+            self.rodar(DOC)
+        _, saida = self.rodar(DOC)
+        self.assertIn("ENCERROU", saida["reason"])
+        self.assertIn("sem progresso", saida["reason"])
+
+    def test_trabalho_de_verdade_zera_o_freio(self):
+        # The other direction: a file touched OUTSIDE `.loop/` is production, and
+        # it has to reset the counter. Excluding too much would make the brake
+        # fire on an agent that is working.
+        self.armar()
+        self.rodar(DOC)
+        self.rodar(DOC)
+        self.assertEqual(self.loop.ler()["sem_progresso"], 1)
+        with open(os.path.join(self.tmp, "app.py"), "w", encoding="utf-8") as f:
+            f.write("trabalho de verdade\n")
+        self.rodar(DOC)
+        self.assertEqual(self.loop.ler()["sem_progresso"], 0)
+
+    def test_commit_tambem_zera_o_freio(self):
+        # And so does a commit, through HEAD — the agent that commits and reports
+        # moved, even if the worktree ends clean.
+        self.armar()
+        self.rodar(DOC)
+        self.rodar(DOC)
+        self.assertEqual(self.loop.ler()["sem_progresso"], 1)
+        with open(os.path.join(self.tmp, "app.py"), "w", encoding="utf-8") as f:
+            f.write("entregue\n")
+        subprocess.run(["git", "add", "app.py"], cwd=self.tmp, check=True,
+                       capture_output=True)
+        subprocess.run(["git", "commit", "-qm", "entrega"], cwd=self.tmp,
+                       check=True, capture_output=True)
+        self.rodar(DOC)
+        self.assertEqual(self.loop.ler()["sem_progresso"], 0)
+
+    def test_marcar_item_na_fila_zera_o_freio(self):
+        # The queue is NOT excluded with `.loop/`: it enters by its counts, so
+        # ticking `- [x]` is still progress.
+        self.armar()
+        self.rodar(DOC)
+        self.rodar(DOC)
+        self.assertEqual(self.loop.ler()["sem_progresso"], 1)
+        with open(self.loop.p("QUEUE.md"), "w", encoding="utf-8") as f:
+            f.write(FILA.replace("- [ ] 3.1", "- [x] 3.1"))
+        self.rodar(DOC)
+        self.assertEqual(self.loop.ler()["sem_progresso"], 0)

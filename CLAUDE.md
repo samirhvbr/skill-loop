@@ -56,10 +56,10 @@ O que **existe e roda** (`0.1.0`, 16/08/2026):
 - `skill/loop/templates/loop.sh` — o atalho que `armar` semeia em
   `.loop/loop.sh` do repositório alvo: `./.loop/loop.sh [6h]` rearma e abre
   o painel, com a raiz derivada e sem sobrescrever a cópia do dono (ADR-016).
-- **291 testes**, controles verificados por mutação.
+- **297 testes**, controles verificados por mutação.
 
 ```bash
-python3 -m unittest discover -s tests -v      # 291 testes, sem modelo, sem rede
+python3 -m unittest discover -s tests -v      # 297 testes, sem modelo, sem rede
 ./install.sh --dry-run                        # mostra o que faria
 loop-watch --uma-vez --raiz <repo>            # uma leitura do acompanhamento
 ```

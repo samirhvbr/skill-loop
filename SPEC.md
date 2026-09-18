@@ -204,9 +204,21 @@ progresso`: o teto de degeneração manda em tudo que o agente escreve, inclusiv
 veredito dele. `armar` apaga o arquivo; `retomar` não, e `porque` avisa que ele
 está lá.
 
-**Progresso** = sha1 de `git status --porcelain` + `HEAD` + contagem da fila.
-Duas paradas com a mesma impressão significam agente falando sem produzir. Fora
-de repositório git, a fila responde sozinha.
+**Progresso** = sha1 de `git status --porcelain -- ':(exclude).loop'` + `HEAD` +
+contagem da fila. Duas paradas com a mesma impressão significam agente falando
+sem produzir. Fora de repositório git, a fila responde sozinha.
+
+⛔ **`.loop/` fica fora do porcelain, e sem isso o freio nunca dispara.** O hook
+grava a entry, o `INDEX.md` e o `STATE.json` a cada parada, e a impressão é
+calculada **antes** de a entry ser escrita: a impressão da parada N carregava o
+rastro da N−1, duas paradas consecutivas nunca coincidiam, e `sem_progresso`
+voltava a zero sempre. Medido no EOP em 18/09/2026 — 16 iterações na mesma
+caixa do dono com `sem_progresso: 0`, e quem encerrou a sessão foi o teto de
+bloqueios consecutivos do harness, não o freio. A fila **não** sai junto: ela
+entra por `pend`/`feitos`, então marcar `- [x]` segue contando como progresso.
+
+A forma do defeito vale registro: o hook escrevia a evidência de que o agente
+estava parado, e era essa evidência que dizia ao loop que ele havia se movido.
 
 **Escopo por itens** conta apenas a rodada: `feitos - feitos_ao_armar`. O
 denominador é gravado em `armar`, junto de `pendentes_ao_armar` — quantos itens

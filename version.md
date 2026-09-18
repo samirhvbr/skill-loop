@@ -1,6 +1,6 @@
 # Version — skill-LOOP
 
-**Current version:** `0.4.2`
+**Current version:** `0.4.3`
 
 > This file is the **source of truth** for the project's version. Anywhere that
 > needs to display or report the version extracts the **first semver number
@@ -65,6 +65,39 @@ commits of the same delivery repeat the version.
 ---
 
 ## 3. Changelog
+
+### `0.4.3` — 2026-09-18 — The brake could never fire: the hook counted its own trail as progress
+
+Measured on the EOP: 16 iterations on a single owner box with `sem_progresso: 0`
+and `max_sem_progresso: 3`. The guard that exists to catch exactly that — *"the
+agent spoke and moved nothing"*, in its own docstring — had never once fired.
+
+`impressao()` hashes `git status --porcelain` + `HEAD` + the queue counts, and
+the hook takes it at `loop-stop.py:252` while it writes the diary entry at
+`:275` — **after**. Entries are born unversioned, so they land in the next
+stop's porcelain. Stop N's imprint therefore carried stop N−1's trail, no two
+consecutive stops ever matched, and the counter reset every time.
+
+The shape is worth naming: the hook wrote the evidence that the agent was stuck,
+and that evidence is what told the loop it had moved. A guard that absolves
+itself with its own report.
+
+**Excluding `.loop/entries/` alone would not have fixed it** — measured on the
+same disk, `INDEX.md` and `STATE.json` are rewritten on *every* stop too, so the
+imprint would have kept differing while looking repaired. The porcelain now
+excludes `.loop/` whole, on the principle the defect exposes: the loop cannot
+count its own trail as the agent moving. Nothing is lost — the queue still
+enters through `pend`/`feitos`, and a commit still enters through `HEAD`.
+
+**Why the suite never caught it.** Every other test runs in a bare tmpdir, where
+`_git` returns "" and the imprint reduces to the queue counts — the one
+arrangement in which the bug cannot appear. And `sem_progresso` had tests for
+the **field** (set it to 3, assert the round ends) and none for the **mechanism**
+that feeds it. `TestFreioEmRepoGit` is now five tests inside a real repository.
+
+297 tests. Mutation: putting `.loop/` back in the porcelain drops 5; dropping the
+queue counts from the imprint drops 2 — that second one is there so a later
+"cleanup" cannot over-exclude and make the brake fire on an agent that is working.
 
 ### `0.4.2` — 2026-09-18 — A stopwatch showing zero says "menos de 1min", not "esgotado"
 
