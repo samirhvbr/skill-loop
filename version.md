@@ -1,6 +1,6 @@
 # Version — skill-LOOP
 
-**Current version:** `0.4.0`
+**Current version:** `0.4.1`
 
 > This file is the **source of truth** for the project's version. Anywhere that
 > needs to display or report the version extracts the **first semver number
@@ -65,6 +65,22 @@ commits of the same delivery repeat the version.
 ---
 
 ## 3. Changelog
+
+### `0.4.1` — 2026-09-18 — The seeded shortcut stops inventing a 6h target
+
+`templates/loop.sh` still defaulted to `--duracao 6h` and still described itself
+as arming "for 6h". That default existed because 6h was a **ceiling** somebody
+had to choose; with nothing ending a round on the clock (`0.4.0`), keeping it
+only stamps a figure on the panel the operator never asked for — and the help
+text promised a clock that no longer exists.
+
+Omitting the duration now means no target at all: `./.loop/loop.sh <session-id>`
+arms and the panel just counts up. Passing one still works and still shows as
+`meta`. Copies already seeded in target repositories are **not** touched — that
+file belongs to the owner (ADR-016), so an existing `.loop/loop.sh` keeps its
+own default until someone edits it.
+
+291 tests. Mutation: restoring the 6h default drops 1.
 
 ### `0.4.0` — 2026-09-18 — Time is measured, never enforced: the clock stops ending rounds
 

@@ -179,13 +179,15 @@ class TestExecucao(Base):
         with open(log, encoding="utf-8") as f:
             return f.read().split("\n")
 
-    def test_com_o_id_e_sem_mais_nada_arma_por_6h_e_abre_o_watch(self):
+    def test_com_o_id_e_sem_mais_nada_arma_sem_alvo_e_abre_o_watch(self):
+        # It used to default to `--duracao 6h`, because 6h was a ceiling someone
+        # had to pick. Nothing ends a round on the clock since ADR-017, so a
+        # default would only stamp a target on the panel nobody asked for.
         proc = self.rodar()
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         ctl = self.argv(self.log_ctl)
         self.assertEqual(ctl[0], "armar")
-        self.assertIn("--duracao", ctl)
-        self.assertEqual(ctl[ctl.index("--duracao") + 1], "6h")
+        self.assertNotIn("--duracao", ctl)
         self.assertIn("--sessao", ctl)
         self.assertEqual(ctl[ctl.index("--sessao") + 1], self.SESSAO)
         self.assertNotIn("--adotar-primeira-parada", ctl,
@@ -194,7 +196,8 @@ class TestExecucao(Base):
         self.assertIsNotNone(watch, "armou e não abriu o painel")
         self.assertEqual(watch[watch.index("--raiz") + 1], os.path.realpath(self.tmp))
 
-    def test_o_segundo_argumento_troca_a_duracao(self):
+    def test_o_segundo_argumento_vira_a_meta(self):
+        # Still accepted, still passed through — as a target that gets measured.
         self.rodar(self.SESSAO, "10h")
         ctl = self.argv(self.log_ctl)
         self.assertEqual(ctl[ctl.index("--duracao") + 1], "10h")

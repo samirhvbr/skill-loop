@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# .loop/loop.sh — start a timed round in this repository, then watch it.
+# .loop/loop.sh — start a round in this repository, then watch it.
 #
-#   ./.loop/loop.sh <session-id>       arm for 6h and open the panel
-#   ./.loop/loop.sh <session-id> 10h   same, with a 10h clock  (6h | 90m | 2h30)
+#   ./.loop/loop.sh <session-id>       arm with no time target, open the panel
+#   ./.loop/loop.sh <session-id> 10h   same, with 10h as a TARGET (6h | 90m | 2h30)
 #   LOOP_SESSAO=<id> ./.loop/loop.sh   the id may come from the environment
+#
+# The duration is a production target that gets measured, never a ceiling: since
+# ADR-017 nothing ends a round on the clock. Omit it and the panel just counts up.
 #
 # The two arguments are recognised by SHAPE, not by position, so the order does
 # not matter: `<id> 10h` and `10h <id>` are the same command.
@@ -12,9 +15,9 @@
 # yours. Add --objetivo, --janela, --dias, --itens below and they survive every
 # future `armar`. Delete the file and the next `armar` writes a fresh one.
 #
-# Under a clock an empty queue does not end the round — it becomes a refill
-# turn (ADR-015). Declare the boundary in .loop/SCOPE.md; it goes verbatim into
-# the refill prompt.
+# An empty queue does not end the round — it becomes a refill turn (ADR-015).
+# Declare the boundary in .loop/SCOPE.md; it goes verbatim into the refill
+# prompt.
 set -euo pipefail
 
 # The root is derived, never written down: move the repo, clone it, rename it —
@@ -108,7 +111,10 @@ RECUSA
         exit 1
     fi
 done
-DURACAO="${DURACAO:-6h}"
+# No default: omitting the duration means no target at all. It used to default
+# to 6h because that 6h was a ceiling someone had to choose; with nothing ending
+# a round on time, inventing a number would only put a figure on the panel that
+# the operator never asked for.
 
 if [ -z "$SESSAO" ]; then
     cat >&2 <<RECUSA
@@ -144,9 +150,12 @@ EXTRA=(
     # --itens 10
 )
 
+ALVO=()
+[ -n "$DURACAO" ] && ALVO=(--duracao "$DURACAO")
+
 "${CTL[@]}" armar \
     --raiz "$RAIZ" \
-    --duracao "$DURACAO" \
+    ${ALVO[@]+"${ALVO[@]}"} \
     --sessao "$SESSAO" \
     ${EXTRA[@]+"${EXTRA[@]}"}
 
