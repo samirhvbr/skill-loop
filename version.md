@@ -1,6 +1,6 @@
 # Version — skill-LOOP
 
-**Current version:** `0.5.1`
+**Current version:** `0.5.2`
 
 > This file is the **source of truth** for the project's version. Anywhere that
 > needs to display or report the version extracts the **first semver number
