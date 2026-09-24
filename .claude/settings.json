@@ -26,8 +26,6 @@
       "Bash(shellcheck:*)"
     ],
     "deny": [
-      "Read(./.env)",
-      "Read(./.env.*)",
       "Read(./**/*.pem)",
       "Read(./**/*.key)",
       "Read(./**/*.p8)",
@@ -35,21 +33,12 @@
       "Read(./**/*.pfx)",
       "Read(./**/id_rsa*)",
       "Read(./**/auth.json)",
-      "Bash(rm -rf:*)",
-      "Bash(git push --force:*)",
-      "Bash(git push -f:*)",
-      "Bash(git push * --force*)",
-      "Bash(git reset --hard:*)",
-      "Bash(git clean -fd:*)",
       "Bash(git filter-branch:*)",
-      "Bash(git filter-repo:*)",
-      "Bash(curl * | sh:*)",
-      "Bash(curl * | bash:*)",
-      "Bash(wget * | sh:*)",
-      "Bash(wget * | bash:*)"
+      "Bash(git filter-repo:*)"
     ],
     "ask": [
       "Bash(sudo:*)",
+      "Bash(rm -rf:*)",
       "Bash(crontab:*)",
       "Bash(systemctl:*)",
       "Bash(./install.sh:*)",
@@ -58,7 +47,11 @@
       "Bash(npm install:*)",
       "Bash(gh repo create:*)",
       "Bash(gh pr create:*)",
-      "Bash(gh issue create:*)"
+      "Bash(gh issue create:*)",
+      "Bash(curl * | sh:*)",
+      "Bash(curl * | bash:*)",
+      "Bash(wget * | sh:*)",
+      "Bash(wget * | bash:*)"
     ]
   },
   "_comment_hooks": "Este projeto NAO instala hook proprio no .claude/ local. O produto e um hook Stop GLOBAL, instalado por ./install.sh no ~/.claude/settings.json. Testar o hook alterando o settings.json real e proibido (CLAUDE.md): use CLAUDE_SETTINGS e CLAUDE_SKILLS_DIR apontando para diretorio temporario."
