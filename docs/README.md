@@ -29,7 +29,7 @@ e estado em [`.continue/`](../.continue/); contrato normativo em
 | [../CLAUDE.md](../CLAUDE.md) / [../AGENTS.md](../AGENTS.md) | Regras de quem desenvolve este repo. Espelhados — editar os dois. |
 | [../.continue/escopo-projeto.md](../.continue/escopo-projeto.md) | Fases F0–F3 + v2, com critério de pronto. |
 | [../.continue/estado-atual.md](../.continue/estado-atual.md) | Onde o projeto está e o que precisa do Samir. |
-| [../.claude/README.md](../.claude/README.md) | Perfil de modelo e postura de permissões. |
+| [../.claude/README.md](../.claude/README.md) | Postura de permissões. O repositório **não escolhe modelo** — a escolha é do usuário, por sessão, com `/model`, e o subagente herda a da sessão (repodocs ADR-027). |
 
 ## Por onde começar
 
