@@ -1,6 +1,6 @@
 # Version — skill-LOOP
 
-**Current version:** `0.5.5`
+**Current version:** `0.5.6`
 
 > This file is the **source of truth** for the project's version. Anywhere that
 > needs to display or report the version extracts the **first semver number
@@ -65,6 +65,43 @@ commits of the same delivery repeat the version.
 ---
 
 ## 3. Changelog
+
+### `0.5.6` — 2026-10-07 — `vendor.sh` copied two prompts and `SKILL.md` links three
+
+The `cp` in `vendor.sh` named its files by hand and listed two. The comment above
+it said *"the copy is broken without these two files, and the breakage is
+silent"* — right about the **hook**, which is presumably how the third was
+overlooked: `loop-stop.py` loads `continuacao.md` and `reabastecimento.md`, and
+only those.
+
+But `SKILL.md`, which the **agent** reads, links a third at line 126:
+`../../prompts/reabastecer.md`. Upstream that resolves to the repository root and
+is correct. In a vendored copy `SKILL.md` lands at
+`<repo>/.claude/skills/loop-work/`, so `../../prompts/` resolves to
+`<repo>/.claude/prompts/` — the directory `vendor.sh` creates and was populating
+without it. Dead link, and silent.
+
+And the two names are not variants of one file. `reabastecer.md` is a queue item
+— *"o que faz a fila durar mais que o bloco destilado"* (ADR-014); the longer
+`reabastecimento.md` is the `reason` template the Stop hook returns
+(ADR-015/ADR-017). Copying the second does not satisfy a link to the first, which
+is the trap in a name that differs by four letters.
+
+**Measured on 07/10/2026: 68 of the 69 vendored copies on this machine carried
+the dead link** — the one exception predates the reference in `SKILL.md`. Among
+them every `BLUE3/*`, `SHVIA/*` and `SSHVTERM/*` checkout.
+
+`tests/test_vendor.py` is the test, and it asserts the rule rather than the
+symptom: **every `../../prompts/*.md` link in `SKILL.md` resolves in the copy**,
+so it fails again the day someone links a fourth file and forgets the `cp`. It
+carries a third assertion guarding itself — if `SKILL.md` stopped linking
+prompts, the first test would pass vacuously — and a fourth covering the hook's
+own templates, because the `cp` serves two readers and a test for one of them is
+half a test. Red before the fix, naming `reabastecer.md`; green after.
+
+This machine has no venv and no `pytest`, so the file runs both ways: under
+`pytest` like its neighbours, and standalone with
+`python3 tests/test_vendor.py`, which is how it was run here.
 
 ### `0.5.1` — 2026-09-18 — A digit instead of a UUID: `armar --escolher-sessao`
 

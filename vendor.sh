@@ -41,8 +41,20 @@ for D in "$@"; do
 
   # `hooks/loop-stop.py` resolves its templates three levels up from `skill/loop/`.
   # From `.claude/skills/loop-work/` that lands in `<repo>/.claude/prompts/` — the
-  # copy is broken without these two files, and the breakage is silent.
-  cp "$REPO/prompts/continuacao.md" "$REPO/prompts/reabastecimento.md" "$D/.claude/prompts/"
+  # copy is broken without these files, and the breakage is silent.
+  #
+  # 🔴 `reabastecer.md` is the third, and it was missing until 07/10/2026. The
+  # comment above said "these two files" and was right about the HOOK:
+  # `loop-stop.py` loads `continuacao.md` and `reabastecimento.md`. But
+  # `SKILL.md`, which the AGENT reads, links `../../prompts/reabastecer.md` — and
+  # `reabastecer.md` is not a variant of `reabastecimento.md`: one is a queue item
+  # (ADR-014), the other the `reason` template the Stop hook returns
+  # (ADR-015/017). Measured: 68 of the 69 vendored copies on this machine carried
+  # that dead link.
+  cp "$REPO/prompts/continuacao.md" \
+     "$REPO/prompts/reabastecimento.md" \
+     "$REPO/prompts/reabastecer.md" \
+     "$D/.claude/prompts/"
 
   cat > "$DEST/VERSION.md" <<EOF
 # loop-work — vendored copy
