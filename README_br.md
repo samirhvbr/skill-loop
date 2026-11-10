@@ -154,6 +154,8 @@ comportamento de hoje (você digita "continua"), nunca uma sessão travada.
 ./install.sh --uninstall     # remove os dois; não toca em nenhum .loop/
 ```
 
+O `./install.sh` termina **disparando** o hook que acabou de registrar (`loop-ctl drill`): uma linha no `settings.json` diz que o hook está registrado, não que ele faz alguma coisa — e o hook é fail-open, quebrado ele sai calado. Onze checagens num repositório descartável, cada uma nos dois sentidos (o freio para quem está parado **e** deixa em paz quem comita); a instalação falha se um guarda-corpo não age (ADR-021).
+
 O hook entra em **grupo próprio** no `~/.claude/settings.json`: os hooks `Stop`
 já instalados (ai-memory, e o do COMMITTER quando existir) continuam intactos e
 todos rodam — só o LOOP devolve `decision: block`.

@@ -227,6 +227,17 @@ distingue uma sessão da outra na lista é o **prompt de abertura**, não o id.
 vivo: varrer `/proc/*/fd` foi medido e deu falso negativo justamente na sessão
 que estava trabalhando.
 
+Instalou ou mexeu no hook? **Dispare-o** — a linha no `settings.json` diz que ele
+está registrado, não que ele faz alguma coisa, e o hook é fail-open: quebrado, ele
+sai calado (ADR-021):
+
+```bash
+loop-ctl drill              # sai 2 se algum guarda-corpo não age
+loop-ctl drill --json
+```
+
+Onze checagens num repositório descartável, cada uma nos dois sentidos (o freio para quem está parado **e** deixa em paz quem comita). O `install.sh` já roda isto e falha se algo não age. Só lê o `settings.json`; nunca o altera.
+
 E quando o agente parar sem entrar em loop:
 
 ```bash

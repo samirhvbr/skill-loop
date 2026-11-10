@@ -160,6 +160,12 @@ The hook is appended as its **own group** in `~/.claude/settings.json`: any
 `Stop` hooks already installed keep working and all of them run — only LOOP
 returns `decision: block`.
 
+`./install.sh` ends by **firing** the hook it just registered (`loop-ctl drill`): a
+line in `settings.json` says the hook is registered, not that it does anything, and
+the hook is fail-open — broken, it exits 0 in silence. Eleven checks in a throwaway
+repository, each in both directions (the brake stops a stalled round **and** leaves
+a committing one alone); the install fails if a guard does not act (ADR-021).
+
 ## Usage
 
 ```

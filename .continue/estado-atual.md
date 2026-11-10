@@ -24,6 +24,15 @@ item; shown in `status`, the panel, `STATUS.md` and each entry. Checked against 
 real transcript to the token. No ceiling — ADR-017 — P-11 keeps an opt-in open.
 351 tests; two mutants survived the first round and were closed by tests.
 
+**`0.5.9` (10/11) — `loop-ctl drill` fires the installed hook (ADR-021).** The suite
+proves this repository; it cannot prove the copy on this machine, and the hook is
+fail-open — broken, it is silent. The drill fires the command registered in every
+`settings.json` against eleven known faults, each in both directions, in a throwaway
+repo; `install.sh` runs it and fails on exit 2. Found while building it: a hook that
+never runs "passes" every drill that says *it must not fire*, so those now count only
+when their sensitivity partner passed. Real hook on this machine: 11/11, three config
+homes, 1.5 s. 374 tests; 14 injected faults and 21 mutations of the drill itself.
+
 ## Since 2026-09-02
 
 **`0.4.0` (18/09) — the clock stopped ending rounds (ADR-017).** The EOP round

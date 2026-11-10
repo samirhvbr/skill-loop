@@ -115,6 +115,22 @@ case ":$PATH:" in
   *) echo "  ⚠️  $BIN não está no PATH — use o caminho completo ou ajuste o PATH" ;;
 esac
 
+# Present is not proven (ADR-021): a line in settings.json says the hook is
+# registered, not that it does anything. Fire the one we just wrote. Exit 2 is "a
+# guard failed to do its job" and fails the install; 1 (something could not run,
+# e.g. no git) only warns. LOOP_SEM_DRILL=1 skips it, for scripted installs.
+if [[ "${LOOP_SEM_DRILL:-}" != "1" ]]; then
+  echo
+  drill_rc=0
+  python3 "$REPO/skill/loop/loop_ctl.py" drill --settings "$SETTINGS" || drill_rc=$?
+  if [[ $drill_rc -eq 2 ]]; then
+    echo "erro: o hook foi registrado mas NÃO faz o que promete — veja o drill acima" >&2
+    exit 2
+  elif [[ $drill_rc -ne 0 ]]; then
+    echo "  ⚠️  o drill não rodou por inteiro (rc=$drill_rc) — o hook está registrado, mas não foi provado" >&2
+  fi
+fi
+
 echo
 echo "Pronto. O hook está inerte em todo repositório sem .loop/."
 echo "Para começar, no repositório alvo:  /loop-work <objetivo>"

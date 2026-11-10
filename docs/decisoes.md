@@ -887,6 +887,105 @@ ADR. Decisão nova entra aqui, com data e status, no mesmo commit da mudança.
 
 ---
 
+## ADR-021 — `loop-ctl drill`: fire the installed hook, in both directions
+
+- **Date:** 2026-11-10 · **Status:** Accepted · **Extends:** ADR-013 (the silence
+  of the fail-open needs a command that speaks)
+- **Where it came from.** `loop-drill` in `cobusgreyling/loop-engineering`: *"loop-audit
+  scores whether your guardrails are **present**. loop-drill tests whether they
+  **work**"* — inject a known fault, assert the guardrail fires, and always drill
+  both directions. The idea is theirs; the scenarios here are ours.
+- **The gap.** The suite proves the code in this repository. It cannot prove the
+  copy that runs on this machine: a line in a `settings.json`, an interpreter on a
+  `PATH`, a symlink, a vendored tree. `hook_instalado()` checks that the string
+  `loop-stop.py` appears in a command; `loop-ctl porque` walks the gates in order.
+  Neither *fires* the hook, and the hook is fail-open (ADR-009): when anything is
+  wrong it exits 0 and says nothing, so a loop that never continues looks exactly
+  like a loop with nothing to do. We have already paid for a guard that was present
+  and never fired (`0.4.3`, the brake) — and found it only in a real round, 16
+  iterations later. Three config homes exist on this machine (`.claude`,
+  `.claude-blue3`, `.claude-pessoal`), each with its own `settings.json`.
+- **Decision.** `loop-ctl drill [--settings FILE]... [--hook PATH] [--json]` reads
+  the Stop command registered in every `settings.json` it finds, groups identical
+  commands, and fires each one with synthetic Stop payloads inside a throwaway git
+  repository, armed through the **installed tree's own `loop_ctl.py`** — so `armar`
+  and its flags are exercised too. Eleven drills, each credited for the rule under
+  test, read from `STATE.json` rather than from prompt text:
+
+  | Drill | Direction | The failure it exists to catch |
+  |---|---|---|
+  | `inerte-fora-do-loop` | specificity | the global hook acts where nobody armed the loop (T-01) |
+  | `continua-a-rodada` | sensitivity | the loop does not continue, silently (ADR-013) |
+  | `freio-dispara` | sensitivity | the brake that never fires (`0.4.3`) — must end by `sem progresso`, not just end |
+  | `freio-calado` | specificity | the brake fires on a round that commits |
+  | `kill-switch` | sensitivity | `.loop/STOP` ignored |
+  | `trava-dispara` | sensitivity | the item that moves and never closes eats the round (ADR-019) |
+  | `trava-calada` | specificity | the lock cuts an item that closes |
+  | `medidor` | sensitivity | the meter reads nothing (ADR-020) |
+  | `medidor-sem-duplicar` | specificity | one line per content block counts 3× |
+  | `fail-open-entrada` | contract | a bad stdin hangs the session (ADR-009) |
+  | `fail-open-estado` | contract | a corrupt `STATE.json` hangs the session |
+
+  Exit `0` all passed · `1` something could not run (no hook registered, no git,
+  a command shape it will not execute) · `2` a guard failed to do its job.
+  `install.sh` now runs it on the settings it just wrote and **exits 2 if a guard
+  does not act**, instead of announcing "Pronto." over a hook that does nothing;
+  `LOOP_SEM_DRILL=1` skips it for scripted installs.
+- **A specificity drill is meaningless alone — measured, then fixed.** The first
+  version of this ran `freio-calado` and `trava-calada` as plain passes, and on a
+  hook with a syntax error both showed a green tick: a hook that never runs never
+  brakes and never locks, so it "passes" every drill that says *it must not fire*.
+  A report of a dead hook with two ticks is the exact lie the drill exists to
+  prevent. Each specificity drill now names its sensitivity partner and counts
+  **only if the partner passed**; otherwise it is reported as skipped, with the
+  reason. (`inerte-fora-do-loop` and `medidor-sem-duplicar` need no rescue: they
+  assert a positive fact — exit 0 with no output, 777 tokens — that a dead hook
+  cannot produce.)
+- **Safety, because it executes a command read from a file.** It runs only the
+  exact shape `install.sh` writes — `python3 "<abs path>/loop-stop.py"` — matched
+  by a regex and executed **without a shell**. A line that merely mentions the hook
+  (`touch …; echo loop-stop.py`, in the test) is reported as not executed and the
+  marker file never appears. All work happens in a temporary directory with its own
+  `HOME`, removed afterwards; no `settings.json` is ever written (a test compares
+  bytes). T-08 in `SECURITY.md`.
+- **What it does not see.** It runs in the environment of whoever typed the
+  command, not the one Claude Code gives the hook: a `python3` that resolves in a
+  terminal and not under the desktop app's `PATH` is invisible to it. It does not
+  drill the classifier (the fixtures of ADR-011 do that), the session binding, or
+  the window. And it proves a copy at one moment, not a round that is running.
+- **On this machine,** against the real installed hook, in 1.5 s: 11 passed, the
+  one command registered in all three config homes, the `settings.json` bytes
+  unchanged.
+- **Alternatives rejected.** *Running the test suite against the installed copy* —
+  `tests/` is not vendored, and it proves the repository, not the installation.
+  *Reading the settings only* — that is `hook_instalado()`, the thing that is
+  present-but-unproven. *Arming a real repository for the drill* — side effects in
+  somebody's work for the sake of a check.
+- **Mutation — of the drill itself.** The test of a drill is that it fails when the
+  thing it guards is broken, so `tests/test_drill.py` breaks a **copy** of the tree,
+  one fault at a time (14), and requires the right drill to go red — and, for the
+  specific ones, only that one: dead brake → `freio-dispara`; brake on everyone →
+  `freio-calado`; brake ending by the wrong reason → `freio-dispara` (the round did
+  end — the drill names the reason it did); dead lock → `trava-dispara`; lock on
+  everyone → both `trava-*`; kill switch ignored; meter off; meter without dedupe;
+  fail-open broken; hook creating `.loop/` by itself; hook that does not continue;
+  a reason without the head item; a syntax error; a broken `loop_ctl`. Then 21
+  controls of the drill and of `install.sh` were switched off, each dropping at
+  least one test (counts include sub-tests): each drill's own check (1–3 each),
+  the pairing (2), the command-shape regex (3), command grouping (1), the missing-hook
+  check (1), temp-dir cleanup (1), the isolated `HOME` (1), the exit code (17), the
+  symlink dedupe (1), `CLAUDE_SETTINGS` (1), the `armar` failure report (1), the
+  not-executed exit code (1), the `install.sh` step (2) and its exit 2 (1).
+- **Consequences.** A new `lib/drill.py` and one subcommand; no change to the hook,
+  the state or the prompt. The suite grows by about 13 s (13.3 s → 26.7 s; the fault-injected copies already run in parallel).
+  An install over a broken tree now fails where before it succeeded — which is the
+  point, and a behaviour change for anyone scripting `install.sh` (`LOOP_SEM_DRILL`).
+  Not done: running the drill from `vendor.sh` on the vendored copy — the global
+  hook points at this tree, not at the copies, so it would prove something that is
+  not what runs.
+
+---
+
 ## Pendências
 
 | # | Pendência | Estado |

@@ -1,6 +1,6 @@
 # Version — skill-LOOP
 
-**Current version:** `0.5.8`
+**Current version:** `0.5.9`
 
 > This file is the **source of truth** for the project's version. Anywhere that
 > needs to display or report the version extracts the **first semver number
@@ -65,6 +65,56 @@ commits of the same delivery repeat the version.
 ---
 
 ## 3. Changelog
+
+### `0.5.9` — 2026-11-10 — `loop-ctl drill` fires the installed hook, in both directions
+
+From `loop-drill` in `cobusgreyling/loop-engineering`: *a score says a guardrail is
+present; a drill says whether it works.* Our version of the gap: the suite proves
+this repository, not the copy on this machine — a line in a `settings.json`, an
+interpreter on a `PATH`, a symlink — and the hook is fail-open (ADR-009), so when it
+is broken it exits 0 and says nothing. `hook_instalado()` only looks for the string
+`loop-stop.py`; `porque` walks the gates. Nothing *fired* it, and we have already
+paid for a guard that was present and never fired (`0.4.3`, found 16 iterations into
+a real round).
+
+`loop-ctl drill [--settings FILE]... [--hook PATH] [--json]` takes the Stop command
+registered in every `settings.json` it finds (three config homes here) and fires it
+with synthetic payloads in a throwaway git repository armed through the installed
+tree's own `loop_ctl.py`. Eleven drills, each credited for the rule under test and
+read from `STATE.json` — the brake drill requires the round to end *by `sem
+progresso`*, not merely to end. Exit 0 / 1 / 2. `install.sh` runs it on the settings
+it just wrote and **exits 2 if a guard does not act**, where it used to print
+"Pronto." over a hook that did nothing (`LOOP_SEM_DRILL=1` skips).
+
+**Found while building it:** a hook with a syntax error showed green ticks on
+`freio-calado` and `trava-calada`. A hook that never runs never brakes and never
+locks, so it passes every drill that says *it must not fire* — a report of a dead
+hook with two ticks is the lie the drill exists to prevent. Each specificity drill
+now names its sensitivity partner and counts only if the partner passed; otherwise
+it is a skip with the reason. (My first test asserted all four specificity drills
+would go vacuous; two of them assert a positive fact and fail on their own. The
+test was wrong, the code was right, and the measured matrix is what settled it.)
+
+It executes a command read from a file, so: only the exact shape `install.sh` writes,
+**no shell** (a `touch <marker>; echo loop-stop.py` line is reported and never run),
+a temporary directory with its own `HOME`, no write to any `settings.json` — T-08 in
+`SECURITY.md`. `SECURITY.md` T-05 also now records the read bounds of the `0.5.8`
+meter (16 MB per file per stop), which that version left out.
+
+Real hook on this machine: 11 passed, one command registered in all three config
+homes, `settings.json` bytes unchanged, 1.5 s.
+
+23 new tests (`tests/test_drill.py`) — and what they test is that **the drill fails
+when the thing it guards is broken**: 14 faults injected one at a time into a *copy*
+of the tree, each required to turn the right drill red, and only that one where the
+fault is specific (a brake that ends the round by the wrong reason; a hook that
+creates `.loop/` by itself; a reason without the head item; a broken `loop_ctl`).
+Then **21 mutations of the drill and of `install.sh`**, each dropping at least one
+test: each drill's own check, the pairing, the command-shape regex (3), grouping,
+the missing-hook check, cleanup, the isolated `HOME`, the exit code, the symlink
+dedupe, `CLAUDE_SETTINGS`, the `armar` failure report, the not-executed exit code,
+the `install.sh` step and its exit 2. The suite goes from 13 s to 27 s: the copies
+run in parallel and it is still the larger part of the cost.
 
 ### `0.5.8` — 2026-11-10 — Token use is measured from the transcript, and never enforced
 

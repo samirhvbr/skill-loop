@@ -120,6 +120,12 @@ da máquina inteira — em **todos** os repositórios, não só nos que usam o L
 - [x] Timeout de 15 s no registro; leitura do transcript limitada a 2 MB pela
       cauda (sessão de meses não vira leitura de arquivo inteiro).
 - [x] Sem rede, sem dependência externa, sem escrita fora de `.loop/`.
+- [x] ✅ The usage meter (ADR-020) reads the transcript and `<session>/subagents/*.jsonl`
+      from a saved offset, **at most 16 MB per file per stop**, only up to the last
+      complete line; a file that got shorter is skipped, never recounted; any error
+      returns `None` and leaves the state untouched. Paths derive from the
+      `transcript_path` the hook already trusts. (Recorded here with `0.5.9`; it
+      was missing from `0.5.8`.)
 - [x] ✅ Instalador **anexa** grupo e preserva os hooks `Stop` existentes —
       verificado contra uma cópia do `settings.json` real, com backup datado
       antes de escrever.
@@ -164,6 +170,26 @@ uma credencial no relato, ela vai para o disco — e, se o repositório versiona
 - [ ] Scan de segredo no texto antes de gravar a `entry` — os padrões do
       `redact.py` do AUDITOR estão vendorizados no COMMITTER e podem ser
       vendorizados de novo aqui.
+
+---
+
+## T-08 — The drill executes a command read from `settings.json`
+
+`loop-ctl drill` (ADR-021) takes the Stop command out of a `settings.json` and runs
+it. The file is the owner's — but a line that merely *mentions* the hook must never
+become a command the drill executes, and a drill must not leave its sandbox.
+
+- [x] ✅ **Only the shape `install.sh` writes** — `python3 "<abs path>/loop-stop.py"` —
+      matched by a regex and executed **without a shell**. Anything else is reported
+      as not executed: the test registers `touch <marker>; echo loop-stop.py` and the
+      marker never appears. Mutation: loosening the regex drops 3 tests.
+- [x] ✅ **Its own world:** a temporary directory with its own `HOME`, a throwaway
+      git identity, `GIT_CONFIG_NOSYSTEM`; removed afterwards. Mutations: leaving the
+      directory (1), leaking the real `HOME` (1).
+- [x] ✅ **Never writes a `settings.json`** — a test compares the bytes. Unreadable is
+      reported apart from not registered.
+- [ ] ⚠️ Known limit, not a control: it runs in the environment of whoever typed the
+      command, not the one Claude Code gives the hook.
 
 ---
 

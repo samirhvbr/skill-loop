@@ -18,6 +18,7 @@ Python 3, stdlib apenas.
 """
 
 import argparse
+import json
 import os
 import sys
 import time
@@ -31,6 +32,7 @@ from estado import (Loop, PADRAO, achar_raiz, agora,   # noqa: E402
                     minutos_desde, objetivo_legivel, objetivo_para_exibir, parse_duracao,
                     tempo_de_producao)
 from uso import humano as humano_uso, resumo as resumo_uso   # noqa: E402
+import drill as drill_mod                                       # noqa: E402
 from sessoes import (JANELA_H as JANELA_SESSOES_H,     # noqa: E402
                      _idade as idade_de_sessao,
                      formatar as formatar_sessoes, homes,
@@ -538,6 +540,77 @@ def cmd_parar(args):
     return 0
 
 
+def cmd_drill(args):
+    """Fire the INSTALLED hook against known faults, in both directions (ADR-021).
+
+    Exit 0 all passed · 1 nothing could be drilled, or something was skipped ·
+    2 a guard failed to do its job. Read-only: the work happens in a temporary
+    directory and no `settings.json` is touched.
+    """
+    if args.hook:
+        comandos = {'python3 "%s"' % os.path.abspath(args.hook): []}
+        sem_hook, ilegiveis = [], []
+    else:
+        comandos, sem_hook, ilegiveis = drill_mod.comandos_registrados(
+            args.settings or drill_mod.settings_padrao())
+
+    relatorio, codigo = [], 0
+    for comando, onde in comandos.items():
+        alvo = drill_mod.interpretar_comando(comando)
+        if not alvo:
+            relatorio.append({"comando": comando, "registrado_em": onde,
+                              "executado": False, "resultados": []})
+            codigo = max(codigo, 1)
+            continue
+        resultados = drill_mod.rodar(*alvo)
+        codigo = max(codigo, drill_mod.codigo_de_saida(resultados))
+        relatorio.append({"comando": comando, "registrado_em": onde,
+                          "executado": True,
+                          "resultados": [r._asdict() for r in resultados]})
+    if not comandos:
+        codigo = max(codigo, 1)
+
+    if args.json:
+        print(json.dumps({"codigo": codigo, "comandos": relatorio,
+                          "sem_hook": sem_hook,
+                          "ilegiveis": [list(x) for x in ilegiveis]},
+                         ensure_ascii=False, indent=2))
+        return codigo
+
+    print("drill do hook instalado — ponta a ponta (ADR-021)")
+    for caminho, motivo in ilegiveis:
+        print("  ⚠️  não consegui ler %s (%s)" % (caminho, motivo))
+    if not comandos:
+        print("\nnenhum hook do loop registrado em: %s"
+              % (", ".join(sem_hook) or "(nenhum settings.json encontrado)"))
+        print("  sem hook registrado o loop não continua nada — e não diz que não "
+              "continua. Instale com `./install.sh` e rode isto de novo.")
+        return codigo
+    for item in relatorio:
+        print("\nhook: %s" % item["comando"])
+        if item["registrado_em"]:
+            print("  registrado em: %s" % ", ".join(item["registrado_em"]))
+        if not item["executado"]:
+            print("  ⚠️  não executo: este comando não tem a forma que o `install.sh` "
+                  "escreve (`python3 \"<caminho>/loop-stop.py\"`). Conferi só que ele "
+                  "existe no settings.")
+            continue
+        for r in item["resultados"]:
+            marca = {"passou": "✔", "falhou": "✘", "pulou": "–"}[r["modo"]]
+            print("  %s %-22s %-15s %s" % (marca, r["id"], r["direcao"], r["detalhe"]))
+            if r["modo"] == "falhou":
+                print("      ↳ o que isto protege: %s" % r["falha"])
+    for caminho in sem_hook:
+        print("\n  ⚠️  hook NÃO registrado em %s — sessões dessa pasta de config "
+              "não são dirigidas por nenhum loop" % caminho)
+    todos = [r for i in relatorio for r in i["resultados"]]
+    print("\n%d passaram · %d falharam · %d pulados"
+          % (sum(r["modo"] == "passou" for r in todos),
+             sum(r["modo"] == "falhou" for r in todos),
+             sum(r["modo"] == "pulou" for r in todos)))
+    return codigo
+
+
 def cmd_retomar(args):
     loop = Loop(_raiz(args))
     if not loop.existe:
@@ -701,6 +774,18 @@ def main(argv=None):
     q.add_argument("--sessao", default=None,
                    help="session_id de agora, para conferir a amarração")
     q.set_defaults(func=cmd_porque)
+
+    d = sub.add_parser("drill", parents=[comum],
+                       help="dispara o hook INSTALADO contra falhas conhecidas, nos "
+                            "dois sentidos (sai 2 se um guarda-corpo não age)")
+    d.add_argument("--settings", action="append", default=None, metavar="ARQUIVO",
+                   help="settings.json a conferir (repetível); default: os de "
+                        "~/.claude*/ ou $CLAUDE_SETTINGS")
+    d.add_argument("--hook", default=None, metavar="CAMINHO",
+                   help="drilla este loop-stop.py direto, sem ler settings "
+                        "(uma cópia vendorizada, por exemplo)")
+    d.add_argument("--json", action="store_true")
+    d.set_defaults(func=cmd_drill)
 
     p = sub.add_parser("parar", parents=[comum])
     p.add_argument("--motivo", default="")

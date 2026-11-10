@@ -471,6 +471,27 @@ rodada retomada segue contando de onde contava.
 testa. A cadeia tem **uma** cópia: o hook consome `condicoes_de_fim` em vez de
 repetir a lista.
 
+### 7.1 Proving the installed hook — `loop-ctl drill` (ADR-021)
+
+`porque` walks the gates; `drill` **fires** the hook. It takes the command registered
+under `hooks.Stop` in each `settings.json` found (`CLAUDE_SETTINGS`, else
+`$CLAUDE_CONFIG_DIR` and `~/.claude*/settings.json`, symlinks counted once), runs it
+with synthetic Stop payloads in a temporary git repository armed through the
+installed tree's own `loop_ctl.py`, and checks eleven things, each in the direction
+that matters — a stalled round ends by `sem progresso`, a committing round is not
+braked; an item that never closes is locked, one that closes is not; `.loop/STOP`
+stops the round; the meter counts a 3-line message once; bad stdin and a corrupt
+`STATE.json` exit 0 in silence; a repository with no `.loop/` is left alone. The
+reason a round ended is read from `STATE.json`, never from prompt text.
+
+A specificity drill ("it must not fire") counts only when its sensitivity partner
+passed — a hook that never runs passes all of them — and is reported as skipped
+otherwise. Exit `0` all passed · `1` something could not run · `2` a guard failed.
+It executes only `python3 "<abs path>/loop-stop.py"`, without a shell; any other
+shape is reported and not run. It writes nothing outside its temporary directory and
+never touches a `settings.json`. `install.sh` runs it after registering the hook and
+exits 2 when it fails (`LOOP_SEM_DRILL=1` skips).
+
 ---
 
 ## 8. Fora de escopo da v1 (não relitigar sem ADR)
