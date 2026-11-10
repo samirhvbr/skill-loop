@@ -26,6 +26,8 @@ import subprocess
 import unicodedata
 from datetime import datetime
 
+from uso import resumo as _resumo_uso
+
 VERSAO_ESTADO = 1
 
 PADRAO = {
@@ -64,6 +66,15 @@ PADRAO = {
     "item_cabeca": None,         # key of the head item at the last stop
     "paradas_no_item": 0,        # consecutive stops with that item at the head
     "itens_travados": 0,         # items this round the loop sent to the owner
+    # ── measured token use (ADR-020), folded from the transcript at each stop.
+    # `uso` is the round, `uso_item` the item at the head; `uso_desde` is where
+    # the meter starts counting (arm time, moved by `retomar`), `uso_offsets` and
+    # `uso_ids` are the read cursor. Measured only — nothing ends a round on it.
+    "uso": None,
+    "uso_item": None,
+    "uso_desde": None,
+    "uso_offsets": {},
+    "uso_ids": [],
     "ultima_impressao": None,
     "colher_itens": True,
     "notificar": True,
@@ -405,6 +416,7 @@ class Loop(object):
         st["fase"] = "rodando"
         st["notificado"] = False
         st["armado_em"] = agora()
+        st["uso_desde"] = st["armado_em"]
         os.makedirs(self.entries, exist_ok=True)
         # Denominador do escopo: quantos itens já estavam feitos quando armou.
         # Sem esta marca, "fechar 10 itens" contaria trabalho de rodadas
@@ -610,6 +622,7 @@ class Loop(object):
             "decisao: %s" % meta.get("decisao", "?"),
             "fecho_do_turno: %s" % ("PARCIAL" if meta.get("parcial") else "completo"),
             "respondida: false" if res.kind == "ASK" else "respondida: n/a",
+        ] + self._linha_uso(meta.get("uso_turno")) + [
             "---",
             "",
         ]
@@ -640,6 +653,19 @@ class Loop(object):
         with open(caminho, "w", encoding="utf-8") as f:
             f.write("\n".join(fm) + "\n".join(corpo) + "\n")
         return os.path.relpath(caminho, self.raiz)
+
+    @staticmethod
+    def _linha_uso(uso):
+        """`uso_turno:` front-matter line — only when something was measured.
+
+        Absent, not zero: "no usage records read" and "the turn used nothing" are
+        different facts, and the panel must not turn one into the other.
+        """
+        if not uso or not uso.get("mensagens"):
+            return []
+        return ["uso_turno: saida=%d entrada_nova=%d cache_lido=%d mensagens=%d"
+                % (uso["saida"], uso["entrada_nova"], uso["cache_lido"],
+                   uso["mensagens"])]
 
     def proximo_numero_de_entry(self):
         """O maior número de entry já gravado, mais um — **nunca** a iteração.
@@ -714,6 +740,12 @@ class Loop(object):
                 f.write("- **Escopo da rodada:** %d de %d item(ns)\n"
                         % (feitos - st.get("feitos_ao_armar", 0), st["escopo_itens"]))
             f.write("- **Objetivo:** %s\n" % objetivo_para_exibir(st.get("objetivo")))
+            uso = st.get("uso")
+            if uso and uso.get("mensagens"):
+                f.write("- **Uso observado:** %s · %d mensagens%s\n"
+                        % (_resumo_uso(uso), uso["mensagens"],
+                           " · ⚠️ parcial (transcript maior que a janela de leitura)"
+                           if uso.get("parcial") else ""))
             if motivo == "escopo esgotado":
                 # O veredito é o produto desta rodada: ela não fechou itens, ela
                 # mediu que não havia itens. Sem o texto aqui, o STATUS.md diz

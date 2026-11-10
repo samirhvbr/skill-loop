@@ -129,6 +129,41 @@ não é o relatório.
 
 ---
 
+### 3.2 Measured token use (ADR-020)
+
+Measured, never enforced: nothing in the chain of §5 reads it. At each stop,
+before the head item is re-read (§5.3), `lib/uso.py::atualizar(st, transcript_path)`
+folds into the state the `usage` recorded since the last stop.
+
+- **Dedupe by `message.id`** (then `requestId`, then `uuid`). Claude Code writes one
+  line per content block, so a message repeats with identical `usage`; a naive sum
+  measured 3.2× too high. The ids of the last chunk (`uso_ids`, at most 256) are
+  kept so a message split across two stops counts once.
+- **Files:** the main transcript plus `<session>/subagents/*.jsonl`, each read from
+  a saved byte offset (`uso_offsets`, keyed by file name), **up to the last complete
+  line**. A subagent file never read and untouched since `uso_desde` is not opened.
+  A file that grew by more than 16 MB is sampled from its tail and the round is
+  flagged `parcial`; a file that got shorter is skipped, never recounted.
+- **Window:** lines with a timestamp at or after `uso_desde` (arm time; `retomar`
+  moves it and clears the cursor).
+- **Components, never summed:** `saida` = `output_tokens`; `entrada_nova` =
+  `input_tokens` + `cache_creation_input_tokens`; `cache_lido` =
+  `cache_read_input_tokens`. No currency.
+
+| State field | Meaning |
+|---|---|
+| `uso` | the round: the three components, `mensagens`, `parcial` |
+| `uso_item` | the same for the item at the head; reset when the head changes, unless there was no previous head |
+| `uso_desde` | ISO time the meter starts counting |
+| `uso_offsets`, `uso_ids` | the read cursor |
+
+Shown by `loop-ctl status`, the panel (informative row, motivo `None`), `STATUS.md`
+(`Uso observado`) and `uso_turno:` in the entry front matter — omitted, not zero,
+when no usage record was read. Fail-open: any error returns `None` and leaves the
+state as it was.
+
+---
+
 ## 4. O `reason` de continuação
 
 Template em [prompts/continuacao.md](prompts/continuacao.md) — **artefato do

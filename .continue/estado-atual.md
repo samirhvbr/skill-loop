@@ -16,6 +16,14 @@ it (`- 🔒`, reason on the line) and the round goes on. Numbers measured on the
 from the transcript (ADR-020) and `loop-ctl drill`, an end-to-end canary of the
 **installed** hook (ADR-021).
 
+**`0.5.8` (10/11) — token use is measured, never enforced (ADR-020).** The hook
+folds the transcript's `usage` into the state at each stop: deduplicated by
+`message.id` (a naive sum read **3.2× too high** on a real session), subagent files
+included, three components never summed, no currency. Per round and per head
+item; shown in `status`, the panel, `STATUS.md` and each entry. Checked against the
+real transcript to the token. No ceiling — ADR-017 — P-11 keeps an opt-in open.
+351 tests; two mutants survived the first round and were closed by tests.
+
 ## Since 2026-09-02
 
 **`0.4.0` (18/09) — the clock stopped ending rounds (ADR-017).** The EOP round

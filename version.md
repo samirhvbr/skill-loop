@@ -1,6 +1,6 @@
 # Version — skill-LOOP
 
-**Current version:** `0.5.7`
+**Current version:** `0.5.8`
 
 > This file is the **source of truth** for the project's version. Anywhere that
 > needs to display or report the version extracts the **first semver number
@@ -65,6 +65,52 @@ commits of the same delivery repeat the version.
 ---
 
 ## 3. Changelog
+
+### `0.5.8` — 2026-11-10 — Token use is measured from the transcript, and never enforced
+
+The same review of `cobusgreyling/loop-engineering` supplied the cautionary tale:
+its `loop-budget` sums a `tokens_estimate`, and its own `thirty-weekday-runs` story
+found the field was **a constant 52,000 over 22 runs** — "estimates are not
+observations". Our hook has what that loop lacks: `transcript_path`, where every
+assistant message carries the `usage` the API reported.
+
+Three ways a first meter lies, each measured before writing the code:
+
+- **Lines are not messages.** One JSONL line per content block: 190 usage lines
+  were 62 `message.id`s, identical `usage` on each repeat. A naive sum read 315,106
+  output tokens; deduplicated, 98,827 — **3.2× too high**.
+- **Subagents are in another file.** The main transcript had no sidechain line; a
+  subagent's usage is in `<session>/subagents/agent-*.jsonl`. Skipping them
+  undercounts the loops that spend most.
+- **`cost-state` is too sparse to be the source**: 2 records in 940 lines.
+
+`lib/uso.py` reads incrementally (a byte offset per file, up to the last complete
+line, so a half-written line waits), dedupes by id across stops, includes the
+subagent files, counts only from `uso_desde` (arm time; `retomar` moves it), and
+keeps three components apart — `saida`, `entrada_nova`, `cache_lido` — because the
+cache reads were ~100× the output on the session measured and a sum means nothing.
+No currency: prices differ by model, and a dollar figure from mixed units is the
+upstream trap again. Per round (`uso`) and per head item (`uso_item`, credited
+before the head is re-read: the turn that ended worked on the *previous* item).
+
+Shown in `status`, the panel, `STATUS.md` and each entry's `uso_turno:` — absent,
+not zero, when nothing was read. **There is no ceiling**: ADR-017 is the reason, and
+P-11 keeps an opt-in on `saida` open for after real rounds.
+
+Run against the real transcript of this session, the meter and an independent
+deduplicated sum agree to the token (141,079 output, 76 messages) in 8 ms.
+
+27 new tests (`tests/test_uso.py`). **22 mutations; two survived the first round**
+— the broad `except` of the fail-open (my failure tests only hit the missing-file
+shortcut, never an exception raised mid-read) and `uso_turno:` printed with nothing
+measured — and were closed by new tests. All 22 now drop at least one: dedupe (3),
+`entrada_nova` without cache creation (2), cache reads folded in (2), the timestamp
+filter, the offset, a half-written line, the kept ids, subagents not read, a stale
+subagent opened, a shrunk file recounted, the window flag, exceptions escaping (1
+each), a shared mutable default (73), the hook call (6), the item meter never reset
+and reset with no previous head (1 each), the unconditional `uso_turno` line,
+`STATUS.md`, `retomar`, `status` twice (1 each), the panel row (41). One equivalent
+mutant not chased: `iniciar` setting `uso_desde` equals the `armado_em` fallback.
 
 ### `0.5.7` — 2026-11-10 — A stop count per item: the lock for an agent that moves and never closes
 

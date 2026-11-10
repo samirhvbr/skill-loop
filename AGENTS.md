@@ -3,7 +3,7 @@
 > **Leia também:** [README_br.md](README_br.md) (o produto, canônico) ·
 > [SECURITY.md](SECURITY.md) (**leitura obrigatória** — modelo de ameaça) ·
 > [SPEC.md](SPEC.md) (pipeline normativo e formato do `.loop/`) ·
-> [docs/decisoes.md](docs/decisoes.md) (ADR-001 a ADR-019 + pendências) ·
+> [docs/decisoes.md](docs/decisoes.md) (ADR-001 a ADR-020 + pendências) ·
 > [prompts/continuacao.md](prompts/continuacao.md) (o prompt do produto) ·
 > [version.md](version.md) (versão + formato de commit).
 >
@@ -56,10 +56,10 @@ O que **existe e roda** (`0.1.0`, 16/08/2026):
 - `skill/loop/templates/loop.sh` — o atalho que `armar` semeia em
   `.loop/loop.sh` do repositório alvo: `./.loop/loop.sh [6h]` rearma e abre
   o painel, com a raiz derivada e sem sobrescrever a cópia do dono (ADR-016).
-- **324 testes**, controles verificados por mutação.
+- **351 testes**, controles verificados por mutação.
 
 ```bash
-python3 -m unittest discover -s tests -v      # 324 testes, sem modelo, sem rede
+python3 -m unittest discover -s tests -v      # 351 testes, sem modelo, sem rede
 ./install.sh --dry-run                        # mostra o que faria
 loop-watch --uma-vez --raiz <repo>            # uma leitura do acompanhamento
 ```
@@ -156,6 +156,10 @@ mensagens vagas.
     It answers *did the item close*, `sem_progresso` answers *did the agent
     move* — keep both. The lock is reversible by hand and retakes the imprint
     (ADR-019).
+17. **Token use is measured from the transcript, never enforced.** Deduplicated
+    by `message.id` (a naive sum is ~3× too high), subagents included, three
+    components that are never summed and no currency. Nothing in the end chain
+    reads it — a number that cuts a round off is the clock again (ADR-020).
 
 E o que o LOOP **nunca** faz: agir sem `.loop/` armado, criar `.loop/` sozinho,
 apagar ou reescrever `ASSUMPTIONS.md`, escrever fora de `.loop/`, chamar rede ou

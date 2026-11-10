@@ -28,6 +28,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "lib"))
 
 from diagnostico import condicoes_de_fim, curto          # noqa: E402
+from uso import resumo as resumo_uso                     # noqa: E402
 from estado import (NUM_DE_ENTRY, Loop, achar_raiz, decorrido,   # noqa: E402
                     dur, minutos_ate_fechar, minutos_desde,
                     objetivo_para_exibir, tempo_de_producao)
@@ -190,6 +191,13 @@ def condicoes(loop, st, pendentes, feitos):
         linhas.append((None, "neste item",
                        "%d parada(s) · trava na %dª"
                        % (st.get("paradas_no_item", 0), st["max_paradas_item"]),
+                       None))
+    # Measured token use (ADR-020). Informative and only once something was read:
+    # a row that says "0" for a meter that never ran would be a fact nobody
+    # measured.
+    if st.get("uso") and st["uso"].get("mensagens"):
+        linhas.append((None, "uso da rodada", resumo_uso(st["uso"])
+                       + (" (parcial)" if st["uso"].get("parcial") else ""),
                        None))
     # `- 🔒` some das duas contagens por desenho, então a fila pode ler
     # "0 pendente(s)" com uma pilha de decisões esperando o dono. A linha só

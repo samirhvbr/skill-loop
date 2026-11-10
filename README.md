@@ -141,6 +141,10 @@ needed), a degenerate-loop detector (identical worktree fingerprint + queue for
 the round goes on, after a warning to split it at stop 6 — `--max-paradas-item`,
 ADR-019), and session binding.
 
+Spend is **measured, not enforced**: token use is read from the session transcript
+(deduplicated by message id, subagents included) and shown in `status`, the panel
+and `STATUS.md`. Nothing ends a round on it (ADR-020).
+
 **Fail-open by design:** any error in the hook → `exit 0`. The worst case
 degrades to today's behaviour (you type "continue"), never to a stuck session.
 

@@ -794,6 +794,99 @@ ADR. Decisão nova entra aqui, com data e status, no mesmo commit da mudança.
 
 ---
 
+## ADR-020 — Token use is measured from the transcript, and never enforced
+
+- **Date:** 2026-11-10 · **Status:** Accepted · **Applies:** ADR-017 (a quantity
+  that matters but must not end the round is *measured*, not enforced)
+- **Where it came from.** The same review of `cobusgreyling/loop-engineering`.
+  Its `loop-budget` skill sums a `tokens_estimate` per run, and its own story
+  `thirty-weekday-runs` records the result: **22 runs, the field a constant 52,000
+  written by the workflow, "not a meter"** — "estimates are not observations".
+  Our loop has the opposite advantage: the hook receives `transcript_path`, where
+  every assistant message carries the `usage` the API reported.
+- **Three ways a first meter lies — each measured before writing it.**
+  1. *Lines are not messages.* Claude Code writes one JSONL line per content
+     block. On a real session, 190 usage-bearing lines were **62** distinct
+     `message.id`s, the `usage` identical on every repeat. Summed naively the
+     session read 315,106 output tokens; deduplicated, 98,827 — **3.2× too many**,
+     and cache reads 33.6M against 11.4M.
+  2. *Subagents are somewhere else.* The main transcript had 0 sidechain lines
+     (`isSidechain` false on all 190). A subagent's usage is in
+     `<session>/subagents/agent-*.jsonl`, `isSidechain` true — in the one file
+     opened, 97 usage lines. A meter that skips them undercounts exactly the
+     loops that spend the most.
+  3. *`cost-state` is not a stop-by-stop meter.* The harness writes cumulative
+     `totalCostUSD`/`modelUsage` records, but **2 in 940 lines** on that session,
+     in an internal format. Rejected as the source.
+- **Decision.** `lib/uso.py` folds the usage into `STATE.json` at every stop:
+  - deduplicated by `message.id` (falling back to `requestId`, then `uuid`), with
+    the ids of the last chunk kept so a message split across two stops counts once;
+  - read **incrementally** — a saved byte offset per file, and only up to the last
+    *complete* line (a line the harness is still writing waits for the next stop);
+  - the main transcript **and** `<session>/subagents/*.jsonl`; a subagent file
+    nobody has read and untouched since the round was armed is not even opened;
+  - only lines with a timestamp at or after `uso_desde` — arm time, moved by
+    `retomar`, so what the session spends with the loop off is not the round's;
+  - three components, never summed: `saida` (`output_tokens`), `entrada_nova`
+    (`input_tokens` + `cache_creation_input_tokens`) and `cache_lido`
+    (`cache_read_input_tokens`). On the session measured the cache reads were
+    ~100× the output; one number would mean nothing.
+  The round's total is `uso`; the item at the head of the queue has its own,
+  `uso_item` — credited *before* the head is re-read, because the turn that just
+  ended worked on the item delivered at the **previous** stop, and reset when the
+  head changes (not when there was no previous head: the work since arming, or
+  since a refuel turn, belongs to the item that is now first).
+- **Where it shows.** `loop-ctl status` (`uso` and the item's output), the panel
+  (`uso da rodada`, informative, motivo `None`), `STATUS.md` at the end
+  (`Uso observado`), and `uso_turno:` in each entry's front matter — absent, not
+  zero, when no usage record was read: "nothing measured" and "the turn used
+  nothing" are different facts.
+- **Not decided here, on purpose.** *No ceiling.* ADR-017 is the reason: a
+  quantity that cuts a round off at a number typed the night before is the clock
+  again. *No money.* Prices differ by model and change, and a dollar figure built
+  from mixed units is an estimate wearing an observation's clothes — the trap
+  upstream fell into. A ceiling, if wanted, is an explicit opt-in on the measured
+  `saida` (P-11), not a default.
+- **Limits, stated.** (1) Only what the transcript records: a tool that calls a
+  model on its own is invisible. (2) The `subagents/` layout is what Claude Code
+  `2.1.318` writes; it is not documented as stable, and if it moves the meter
+  undercounts — it does not break, and does not say how many files it read.
+  (3) The hook can fire before the harness has flushed the last message
+  (ADR-012's race), so a turn's tokens may be credited one stop late; totals
+  converge, per-stop and per-item attribution can lag. (4) A file that grew by
+  more than 16 MB since the last read is sampled from its tail and the round is
+  flagged `parcial`; a file that got shorter is skipped, never recounted.
+  (5) Whether `output_tokens` includes thinking tokens was not established.
+- **Verified against reality.** Run on the real transcript of this session, the
+  meter and an independent deduplicated sum agree to the token (141,079 output,
+  541,280 new input, 16,017,298 cache read, 76 messages), in 8 ms; a second read
+  with no new line adds nothing.
+- **Consequences.** `STATE.json` gains five fields, all additive (`uso`,
+  `uso_item`, `uso_desde`, `uso_offsets`, `uso_ids`); a `.loop/` armed before
+  `0.5.8` starts measuring at its next stop, from `armado_em`. The hook reads more
+  files than before, all derived from `transcript_path` — the same trust it
+  already extended to that path — and writes nothing new outside `.loop/`. The
+  mutable defaults in `PADRAO` (`{}`, `[]`) are never mutated in place; a test
+  fails if they are.
+- **Mutation.** 22 controls switched off, each dropping at least one test; two
+  *survived* the first round and were closed by new tests: the broad `except`
+  (the first failure tests only hit the missing-file shortcut, never an exception
+  raised during the read) and `uso_turno:` printed with nothing measured. Dedupe
+  by id (3), `entrada_nova` without cache creation (2), cache reads folded into
+  new input (2), the timestamp filter (1), the offset not advancing (1), a
+  half-written line consumed (1), ids not kept between stops (1), subagents not
+  read (1), a stale subagent file opened (1), a shrunk file recounted (1), the
+  window cap not flagged (1), exceptions escaping (1), a shared mutable default
+  (73), the meter call removed from the hook (6), the item meter never reset (1)
+  and reset with no previous head (1), the `uso_turno` line unconditional (1),
+  `STATUS.md` without the line (1), `retomar` keeping the cursor (1), the panel
+  row unconditional (41), `status` without the item's output (1) and without the
+  round's usage (1). One mutant is equivalent and was not chased: `iniciar`
+  setting `uso_desde` equals the `armado_em` fallback — it stays because
+  `retomar` moves it.
+
+---
+
 ## Pendências
 
 | # | Pendência | Estado |
@@ -808,3 +901,4 @@ ADR. Decisão nova entra aqui, com data e status, no mesmo commit da mudança.
 | P-08 | **Rodada órfã: turno que morre sem emitir `Stop`.** O único gatilho é o hook, e `condicoes_de_fim` só é avaliada dentro dele — então erro de API a meio da resposta, crash ou queda de rede deixam a rodada pendurada em `ativo: true` e **nenhuma condição de fim pode encerrá-la**, nem o relógio, porque ele só é consultado numa parada que não vai acontecer. O painel mostra `relógio esgotado` e o loop segue "ativo"; `--ate-encerrar` nunca sai. Observado em 17/08 (`API Error: Server error mid-response` no EOP, às ~13:33). Não é o fail-open falhando — é o gatilho nunca disparando. Saídas a avaliar: `loop-watch` declarar a rodada órfã quando o relógio estoura sem parada nova; ou o rearme por cron da F3 varrer estado vencido. | aberta |
 | P-09 | **O auto-bind do ADR-008 adota sessão que NÃO armou o loop — contraexemplo medido em 01–02/09.** A decisão diz, com estas palavras, que a primeira parada *"é **necessariamente** a da sessão que armou"*, e o comentário em `hooks/loop-stop.py:167` repete a afirmação. **Não é necessariamente.** É a primeira sessão que terminar um turno naquele repositório — e no EOP foi uma sessão que o dono havia aberto para outra coisa (triagem dos PRs do Dependabot), enquanto o `loop.sh` armava de outra. Custo medido nessa rodada: **18 entradas** de diário (`0153`–`0160`, `0166`–`0172`) que são mensagens sobre PRs e sobre um artifact, arquivadas sob os itens `L191`, `L201`, `L219` e `L220`, com que nada têm a ver; **4 itens espúrios** enfileirados a partir de fragmentos truncados da mensagem (`- [ ] a página como fonte`), que é a **terceira** reincidência da família da emenda do ADR-005; e — o mais caro — **duas sessões dirigidas contra a mesma árvore de trabalho**, que no EOP produziu duas colisões de `version.md` (`1.76.71` e `1.76.72`, a segunda no próprio commit que consertava a primeira), duas `master` vermelhas na guarda `G2` e dois commits que anunciaram trabalho que o diff não continha. ⚠️ **O conserto não foi feito, e a razão é a norma desta casa:** mexer em `hooks/` ou `lib/` com rodada viva faz o hook sair fail-open e trava a rodada no meio — foi o motivo escrito no `0.2.4` para o conserto do `INDEX.md` ter ficado para depois — e a rodada do EOP estava rodando enquanto isto era escrito, com **outra** sessão executando o `L219`. ✅ **A PRIMEIRA saída foi entregue em 02/09 (`0.2.6`), e ela era a única fora do caminho do hook:** o `armar` vive em `loop_ctl.py`, que o `hooks/loop-stop.py` **não importa** — ele importa só `classificador`, `diagnostico`, `estado` e `transcricao` de `lib/`. Logo a guarda de porta podia entrar **com a rodada viva**, e entrou; as outras duas seguem barradas pela mesma norma. E ela não é a *falha ruidosa* pura que esta linha propunha: recusar sem saída quebraria o `loop.sh` do EOP (`loop-ctl armar --raiz ~/x/EOP --duracao 10h`, sem `--sessao`) e viraria `--force` na semana seguinte — nasceu o `--adotar-primeira-parada`, que mantém o comportamento alcançável e o obriga a ser dito. Saídas restantes, as duas em `hooks/`/`lib/`: gravar no ato do `armar` um marcador barato do processo que armou (PID/tty) e o hook conferir antes de adotar, caindo no comportamento antigo quando o campo estiver ausente, para não quebrar rodada em curso; e um lock de árvore em `.loop/` que faça a segunda sessão **recusar** item em vez de competir. | **aberta** |
 | P-10 | **Calibrar 6 e 15 (ADR-019) em rodadas reais.** Os dois números saíram de um único projeto (EOP, 126 itens). Falta medir em outros repositórios e separar item grande que avança de item travado — o que o `INDEX.md` não permite hoje. | aberta |
+| P-11 | **Teto opcional sobre o `saida` medido (ADR-020)?** Decidir só depois de algumas rodadas com o medidor ligado, olhando o gasto real por item e por rodada. Nunca como default: um teto que corta a rodada é o relógio de novo (ADR-017). | aberta |

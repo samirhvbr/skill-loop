@@ -203,6 +203,12 @@ marcada. ASK e fecho parcial aparecem sinalizados na lista de paradas. Com o
 loop parado, o painel avisa que o **hook está inerte** — digitar "continua" no
 chat não reativa nada.
 
+O gasto aparece sem custo extra (ADR-020): `loop-ctl status` e o painel mostram
+o uso **medido** da rodada — `saída · entrada nova · cache lido`, três números
+que não se somam — e o da saída no item da frente. Vem do transcript, sem
+duplicar mensagem e contando os subagentes. **Mede, não encerra:** nenhuma
+condição de fim lê isso.
+
 E quando armar for a pergunta — **qual sessão vai dirigir?**:
 
 ```bash

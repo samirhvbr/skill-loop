@@ -30,6 +30,7 @@ from estado import (Loop, PADRAO, achar_raiz, agora,   # noqa: E402
                     decorrido, dur, fora_da_janela, limiar_aviso_item,
                     minutos_desde, objetivo_legivel, objetivo_para_exibir, parse_duracao,
                     tempo_de_producao)
+from uso import humano as humano_uso, resumo as resumo_uso   # noqa: E402
 from sessoes import (JANELA_H as JANELA_SESSOES_H,     # noqa: E402
                      _idade as idade_de_sessao,
                      formatar as formatar_sessoes, homes,
@@ -60,6 +61,14 @@ Fila vazia = o loop encerra. É o critério de pronto do ciclo inteiro.
 - [ ] (substitua por itens reais destilados da documentação)
 """
 
+
+
+def _uso_do_item(st):
+    """` · saída 12.3k neste item` — empty until something was measured."""
+    uso = st.get("uso_item")
+    if not uso or not uso.get("saida"):
+        return ""
+    return " · saída %s neste item" % humano_uso(uso["saida"])
 
 
 def _teto_por_item(st):
@@ -382,8 +391,13 @@ def cmd_status(args):
     print("próximo    : %s" % (loop.proximo_item() or "—"))
     print("sem prog.  : %d / %d" % (st.get("sem_progresso", 0),
                                     st.get("max_sem_progresso", 0)))
-    print("neste item : %d parada(s) à frente · %s"
-          % (st.get("paradas_no_item", 0), _teto_por_item(st)))
+    print("neste item : %d parada(s) à frente · %s%s"
+          % (st.get("paradas_no_item", 0), _teto_por_item(st),
+             _uso_do_item(st)))
+    if st.get("uso") and st["uso"].get("mensagens"):
+        print("uso        : %s · %d mensagens%s" % (
+            resumo_uso(st["uso"]), st["uso"]["mensagens"],
+            " · parcial" if st["uso"].get("parcial") else ""))
     print("fim por    : %s" % _fim_por(st, pend))
     if st.get("escopo_itens"):
         print("escopo     : %d de %d item(ns) desta rodada"
@@ -537,6 +551,12 @@ def cmd_retomar(args):
     st["sem_progresso"] = 0
     st["item_cabeca"] = None
     st["paradas_no_item"] = 0
+    # The meter restarts at the resume: whatever the session spent while the loop
+    # was off is not the round's, and the read cursor is stale (ADR-020).
+    st["uso_desde"] = agora()
+    st["uso_offsets"] = {}
+    st["uso_ids"] = []
+    st["uso_item"] = None
     st["encerrado_por"] = None
     st["encerrado_detalhe"] = None
     st["encerrado_em"] = None

@@ -12,7 +12,7 @@ e estado em [`.continue/`](../.continue/); contrato normativo em
 
 | Arquivo | O que é |
 |---|---|
-| [decisoes.md](decisoes.md) | **ADRs.** ADR-001 a ADR-019 + pendências P-01 a P-10. Decisão nova entra aqui. |
+| [decisoes.md](decisoes.md) | **ADRs.** ADR-001 a ADR-020 + pendências P-01 a P-11. Decisão nova entra aqui. |
 
 ## Fora desta pasta
 

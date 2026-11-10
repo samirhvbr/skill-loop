@@ -138,6 +138,11 @@ primeira parada. A janela cruza a meia-noite (`22:00-06:00`) e **falha aberta**:
 | Amarração à sessão | auto | outro chat no mesmo repo não é dirigido por este loop |
 | Política de ASK | `continuar` | decisão do Samir; `continuar-exceto-irreversivel` e `parar` disponíveis |
 
+O gasto é **medido, não imposto**: o uso de tokens vem do transcript da sessão
+(sem duplicar mensagem, contando os subagentes) e aparece no `status`, no painel e
+no `STATUS.md` — três números que não se somam, sem moeda. Nenhuma condição de fim
+lê isso (ADR-020).
+
 **Fail-open por desenho:** qualquer erro no hook → `exit 0`. O pior caso vira o
 comportamento de hoje (você digita "continua"), nunca uma sessão travada.
 

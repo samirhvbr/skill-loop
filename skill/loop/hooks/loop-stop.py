@@ -39,6 +39,7 @@ from estado import (Loop, achar_raiz, agora,   # noqa: E402
                     chave_do_item, limiar_aviso_item, mesmo_item,
                     objetivo_para_exibir, restante_da_rodada)
 from transcricao import ultima_mensagem        # noqa: E402
+from uso import atualizar as atualizar_uso     # noqa: E402
 
 # repo/skill/loop/hooks → repo
 _RAIZ_SKILL = os.path.dirname(os.path.dirname(os.path.dirname(_AQUI)))
@@ -217,10 +218,16 @@ def _paradas_no_item(loop, st, item, n):
     nothing": this guard may fail to act, never to stop the hook.
     """
     chave = chave_do_item(item)
-    if chave and mesmo_item(chave, st.get("item_cabeca")):
+    anterior = st.get("item_cabeca")
+    if chave and mesmo_item(chave, anterior):
         st["paradas_no_item"] = st.get("paradas_no_item", 0) + 1
     else:
         st["paradas_no_item"] = 1 if chave else 0
+        if anterior:
+            # A different item: its own meter starts at zero (ADR-020). Not when
+            # there was no previous head — the work since arming, or since a
+            # refuel turn, belongs to the item that is now first.
+            st["uso_item"] = None
     st["item_cabeca"] = chave
 
     maximo = st.get("max_paradas_item") or 0
@@ -239,6 +246,7 @@ def _paradas_no_item(loop, st, item, n):
         novo = chave_do_item(loop.proximo_item())
         st["item_cabeca"] = novo
         st["paradas_no_item"] = 1 if novo else 0
+        st["uso_item"] = None
         return _bloco_item_trava(texto, paradas), [(texto, paradas)]
 
     aviso = limiar_aviso_item(maximo)
@@ -341,6 +349,13 @@ def principal():
     pendentes, feitos = loop.contagem_fila()
     item = loop.proximo_item()
 
+    # Measured token use (ADR-020). Before the head item is re-read below: the
+    # turn that just ended worked on the item delivered at the PREVIOUS stop, so
+    # its tokens are credited to `uso_item` while that is still the head the
+    # counter remembers. Fail-open: `None` means nothing was read, and nothing in
+    # the state moved.
+    uso_turno = atualizar_uso(st, payload.get("transcript_path"))
+
     # Stops per item (ADR-019). A lock rewrites the queue, so the counts and the
     # head are re-read — the chain below and the prompt must see the queue the
     # agent will actually find. The imprint is retaken too: locking changes
@@ -372,6 +387,7 @@ def principal():
         "titulo": (item or res.sinal),
         "colhidos": colhidos,
         "travados": travados,
+        "uso_turno": uso_turno,
         "decisao": decisao,
         "parcial": parcial,
     })
