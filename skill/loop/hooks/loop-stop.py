@@ -36,6 +36,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(_AQUI), "lib"))
 from classificador import classificar          # noqa: E402
 from diagnostico import condicoes_de_fim   # noqa: E402
 from estado import (Loop, achar_raiz, agora,   # noqa: E402
+                    chave_do_item, limiar_aviso_item, mesmo_item,
                     objetivo_para_exibir, restante_da_rodada)
 from transcricao import ultima_mensagem        # noqa: E402
 
@@ -77,7 +78,7 @@ já foi arquivado em {entry} e ninguém está lendo o chat agora.
 
 Item atual da fila (.loop/QUEUE.md): {item}
 
-{bloco_ask}Execute o item até o fim, marque `- [x]` no QUEUE.md e siga direto para o
+{bloco_ask}{bloco_item}Execute o item até o fim, marque `- [x]` no QUEUE.md e siga direto para o
 próximo, sem pedir confirmação. Se o item depender de uma decisão que só o dono
 pode tomar, troque o `- [ ]` dele por `- 🔒`, registre a pergunta em uma linha e
 siga para o próximo — não encerre por isso. Só encerre se a fila zerar, se
@@ -168,6 +169,82 @@ def _bloco_colhidos(colhidos):
     linhas = "\n".join("  - %s" % c for c in colhidos)
     return ("**%d item(ns) do seu fecho entraram na fila** (revise a redação se "
             "ficou truncada):\n%s\n\n" % (len(colhidos), linhas))
+
+
+def _resumo(texto, limite=140):
+    texto = " ".join((texto or "").split())
+    return texto if len(texto) <= limite else texto[:limite - 1] + "…"
+
+
+def _bloco_item_aviso(paradas, maximo):
+    return (
+        "⚠️ **Este item já esteve à frente da fila em %d paradas seguidas** "
+        "(o loop o manda para a mesa do dono na %dª). Um item que não fecha em "
+        "poucas paradas não cumpre a regra da fila — executável sozinho, com um "
+        "fim que dê para reconhecer. Escolha agora, antes de seguir:\n\n"
+        "- **Está quase fechado?** Feche-o neste turno e marque `- [x]`.\n"
+        "- **É grande demais?** Troque-o por sub-itens `- [ ]` menores, cada um "
+        "com um fim reconhecível, e marque `- [x]` o que já está feito.\n"
+        "- **Depende de decisão minha?** Marque `- 🔒` e siga para o próximo.\n\n"
+        "Não repita a abordagem das últimas paradas.\n\n" % (paradas, maximo))
+
+
+def _bloco_item_trava(texto, paradas):
+    return (
+        "🔒 **O loop travou o item anterior**: «%s» ficou à frente da fila por "
+        "%d paradas seguidas sem ser concluído e foi para a mesa do dono "
+        "(`- 🔒`, com o motivo na própria linha). **Não o retome** — o item "
+        "acima é o próximo da fila.\n\n" % (_resumo(texto), paradas))
+
+
+def _paradas_no_item(loop, st, item, n):
+    """Count consecutive stops with the same item at the head (ADR-019).
+
+    `sem_progresso` asks whether the agent MOVED; this asks whether the item
+    CLOSED. They are different questions: an agent that commits at every stop and
+    never ticks the head item moves all day and finishes nothing, and the
+    fingerprint calls each stop progress.
+
+    Two steps, because the data says one is not enough. Past `limiar_aviso_item`
+    the prompt asks the agent to close, split or lock the item; at
+    `max_paradas_item` the loop locks it itself (`- 🔒`) and the round goes on
+    with the next one. A big item that is really progressing can be split in the
+    warning window; one that is not ends up on the owner's desk, visible and
+    counted, instead of eating the round. The lock is a state the owner can undo
+    by editing one line — it is not an end condition and ends nothing.
+
+    Returns `(bloco_para_o_prompt, travados)`. Every failure path degrades to "do
+    nothing": this guard may fail to act, never to stop the hook.
+    """
+    chave = chave_do_item(item)
+    if chave and mesmo_item(chave, st.get("item_cabeca")):
+        st["paradas_no_item"] = st.get("paradas_no_item", 0) + 1
+    else:
+        st["paradas_no_item"] = 1 if chave else 0
+    st["item_cabeca"] = chave
+
+    maximo = st.get("max_paradas_item") or 0
+    if not chave or maximo < 1:
+        return "", []
+    paradas = st["paradas_no_item"]
+
+    if paradas >= maximo:
+        texto = loop.travar_item(
+            chave, "travado pelo loop após %d paradas sem concluir "
+                   "(ADR-019, #%04d)" % (paradas, n))
+        if not texto:
+            return "", []
+        st["itens_travados"] = st.get("itens_travados", 0) + 1
+        # The next item starts its own count at 1: it is the head at THIS stop.
+        novo = chave_do_item(loop.proximo_item())
+        st["item_cabeca"] = novo
+        st["paradas_no_item"] = 1 if novo else 0
+        return _bloco_item_trava(texto, paradas), [(texto, paradas)]
+
+    aviso = limiar_aviso_item(maximo)
+    if aviso and paradas >= aviso:
+        return _bloco_item_aviso(paradas, maximo), []
+    return "", []
 
 
 def _responder(decisao, reason=None, aviso=None):
@@ -264,6 +341,18 @@ def principal():
     pendentes, feitos = loop.contagem_fila()
     item = loop.proximo_item()
 
+    # Stops per item (ADR-019). A lock rewrites the queue, so the counts and the
+    # head are re-read — the chain below and the prompt must see the queue the
+    # agent will actually find. The imprint is retaken too: locking changes
+    # `pend`, and left alone the NEXT stop would read that as progress and reset
+    # `sem_progresso` — the loop crediting itself for its own bookkeeping, the
+    # same shape as the 0.4.3 defect.
+    bloco_item, travados = _paradas_no_item(loop, st, item, n)
+    if travados:
+        pendentes, feitos = loop.contagem_fila()
+        item = loop.proximo_item()
+        st["ultima_impressao"] = loop.impressao()
+
     # A cadeia de condições mora em `lib/diagnostico.py`, e não aqui, para que
     # `loop-ctl porque` mostre **a** ordem em que este hook decide — e não uma
     # cópia dela, que apodreceria na primeira condição nova. `contagem` vai
@@ -275,11 +364,14 @@ def principal():
     motivo, detalhe = fim if fim else (None, None)
 
     decisao = "encerrou: %s" % motivo if motivo else "continuou"
+    if travados and not motivo:
+        decisao = "continuou · item 🔒"
     caminho = loop.gravar_entry(n, res, texto, {
         "sessao": sid,
         "item": item,
         "titulo": (item or res.sinal),
         "colhidos": colhidos,
+        "travados": travados,
         "decisao": decisao,
         "parcial": parcial,
     })
@@ -369,6 +461,7 @@ def principal():
         "objetivo": objetivo_para_exibir(st.get("objetivo")),
         "bloco_ask": _bloco_ask(res),
         "bloco_colhidos": _bloco_colhidos(colhidos),
+        "bloco_item": bloco_item,
     }
 
     # An empty queue is a refuelling turn, never an ending (ADR-015, made

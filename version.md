@@ -1,6 +1,6 @@
 # Version — skill-LOOP
 
-**Current version:** `0.5.6`
+**Current version:** `0.5.7`
 
 > This file is the **source of truth** for the project's version. Anywhere that
 > needs to display or report the version extracts the **first semver number
@@ -65,6 +65,58 @@ commits of the same delivery repeat the version.
 ---
 
 ## 3. Changelog
+
+### `0.5.7` — 2026-11-10 — A stop count per item: the lock for an agent that moves and never closes
+
+Found by reading `cobusgreyling/loop-engineering` (MIT), a pattern library for
+scheduled agent loops. Most of it solves a different problem — it schedules runs,
+we keep one session alive — but its `loop-context` breaker caps attempts **per
+item**, and its CI-sweeper story prices the lack of that cap: 14 attempts on one
+failure, 1.8M tokens, three hours.
+
+The gap was real in our code. `sem_progresso` compares a fingerprint (worktree
+outside `.loop/`, `HEAD`, queue counts), so it answers *did the agent move?* An
+agent that commits at every stop and never ticks the head item moves all day, the
+fingerprint changes each stop, and the brake never fires. `proximo_item()` was
+stateless: nothing counted how many times the same item came back, and ADR-018
+only asks the **agent** to lock what it cannot do.
+
+**The number came from data, not a guess.** The EOP `INDEX.md` — 516 stops, 126
+items delivered — says 70% of the items closed in one stop, 94% within six, and
+only 2 ever reached 15 (`L781`, the owner box behind ADR-018, 34 stops; `L680`,
+29). One project, mixed code versions, an `INDEX` that cannot tell a large item
+that is progressing from one that is stuck (`L608` — *blocos 2..9*, 14 stops — was
+progressing). That last limit shaped the design: **two steps, not one cut.**
+
+- At 6 stops (40% of the ceiling) the `reason` asks the agent to close the item,
+  **split** it, or lock it. Splitting rewrites the head and resets the count.
+- At 15 the hook rewrites `- [ ]` to `- 🔒`, with the reason on the same line, and
+  the round goes on with the next item. Reversible by editing one line. It is not
+  an end condition: ADR-017's lesson stands — one stuck item is a fact about one
+  item.
+- `armar --max-paradas-item N`; `0` switches the guard off. `status`, `armar` and
+  the panel show the count.
+
+Three details are decisions, in ADR-019: identity is a normalised **prefix**, so a
+progress note appended to the line does not make a new item; the **imprint is
+retaken after a lock**, or the next stop would read the lock as progress and reset
+`sem_progresso` — the loop crediting itself for its own bookkeeping, the `0.4.3`
+shape; and the queue is rewritten with `surrogateescape`, because the agent writes
+that file and a byte cut mid-character must survive the round trip.
+
+`.loop/` armed before this version picks up the default ceiling of 15 on its next
+run. Checked before touching `lib/` and `hooks/` (P-09's norm): the three `ativo`
+rounds on this machine last stopped 7 to 54 days ago, none live.
+
+18 new tests (`tests/test_item.py`), two panel tests updated to list the new
+informative row. **17 mutations, each dropping at least one test:** the lock (3),
+the warning (1), the imprint retaken (1), identity as strict equality (2), the
+12-character floor (1), `0` not switching the guard off (1), `surrogateescape`
+(1), the re-check of the head (1), the count not resetting (2), the prompt
+placeholder (1), `retomar` keeping the count (1), `armar` dropping the flag (2),
+the `INDEX` marker (1), the entry section (1), the new head not starting at 1
+(1), the default ceiling (3), the reason on the locked line (2). **P-10** keeps the
+6/15 calibration open.
 
 ### `0.5.6` — 2026-10-07 — `vendor.sh` copied two prompts and `SKILL.md` links three
 

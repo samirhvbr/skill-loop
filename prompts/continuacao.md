@@ -3,7 +3,7 @@ Template do `reason` que o hook Stop devolve para retomar o agente.
 Artefato do produto — mudar aqui é mudar comportamento (bump em version.md).
 
 Placeholders (str.format): iteracao, max_iteracoes, kind, sinal, entry, item,
-pendentes, feitos, objetivo, bloco_ask, bloco_colhidos.
+pendentes, feitos, objetivo, bloco_ask, bloco_colhidos, bloco_item.
 
 Regras de escrita deste prompt (aprendidas em campo, SPEC.md §4):
 - Dizer que o chat NÃO está sendo lido. Sem isso o agente volta a resumir.
@@ -21,7 +21,7 @@ perdido: siga produzindo.
 
 > {item}
 
-{bloco_ask}{bloco_colhidos}
+{bloco_ask}{bloco_colhidos}{bloco_item}
 **Como seguir:**
 
 1. Execute o item atual **até o fim** — não relate progresso parcial, não peça

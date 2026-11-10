@@ -172,6 +172,12 @@ armado:
 - **Item que depende de decisão do dono vira `- 🔒`** e você segue para o
   próximo, no mesmo turno (ADR-018). Não é encerrar: é tirar da fila de execução
   o que não é executável por você. `- [x]` ali mentiria.
+- **Item que não fecha** (ADR-019): se o mesmo item está à frente da fila há
+  várias paradas, o hook avisa (a partir da 6ª) e, na 15ª, **ele mesmo** troca o
+  `- [ ]` por `- 🔒` e a rodada segue. Item que não fecha em poucas paradas não
+  é executável sozinho: **decomponha** em itens menores, cada um com um fim
+  reconhecível, antes de o loop travar por você. `--max-paradas-item N` muda o
+  teto, `0` desliga.
 - **Encerre de verdade** só se existir `.loop/STOP`, se a próxima ação for
   destrutiva/irreversível sem premissa que a cubra, ou se você estiver bloqueado
   por algo fora do seu alcance (credencial, serviço fora do ar). Fila vazia não

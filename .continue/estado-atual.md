@@ -4,6 +4,18 @@
 > precisa do Samir. Escopo e fases em
 > [`escopo-projeto.md`](escopo-projeto.md).
 
+## Since 2026-11-10
+
+**`0.5.7` (10/11) — a stop count per item (ADR-019).** From a review of
+`cobusgreyling/loop-engineering`: `sem_progresso` answers *did the agent move*,
+nothing answered *did the item close*. The hook now counts consecutive stops with
+the same head item; a warning to split it at stop 6, and at stop 15 the loop locks
+it (`- 🔒`, reason on the line) and the round goes on. Numbers measured on the EOP
+`INDEX.md` (126 items, one project) — P-10 keeps the calibration open.
+324 tests, 17 mutations checked. Next in the same review: a real token meter read
+from the transcript (ADR-020) and `loop-ctl drill`, an end-to-end canary of the
+**installed** hook (ADR-021).
+
 ## Since 2026-09-02
 
 **`0.4.0` (18/09) — the clock stopped ending rounds (ADR-017).** The EOP round

@@ -56,6 +56,14 @@ PADRAO = {
     "politica_ask": "continuar",  # continuar | continuar-exceto-irreversivel | parar
     "sem_progresso": 0,
     "max_sem_progresso": 3,
+    # ── per-item stop count (ADR-019). `sem_progresso` cannot see an agent that
+    # commits every stop and never closes the item at the head of the queue.
+    # `max_paradas_item` is where the loop locks the item (`- 🔒`); the warning
+    # comes earlier, derived by `limiar_aviso_item`. 0 turns both off.
+    "max_paradas_item": 15,
+    "item_cabeca": None,         # key of the head item at the last stop
+    "paradas_no_item": 0,        # consecutive stops with that item at the head
+    "itens_travados": 0,         # items this round the loop sent to the owner
     "ultima_impressao": None,
     "colher_itens": True,
     "notificar": True,
@@ -265,6 +273,45 @@ def slug(texto, limite=48):
     return (texto[:limite].strip("-") or "sem-titulo")
 
 
+def chave_do_item(texto):
+    """The identity of a queue item, for counting stops on it (ADR-019).
+
+    A normalised prefix, not a hash of the whole line: the agent appends progress
+    notes to the item it is working on, and a hash would call each edit a new
+    item and reset the count that exists to catch exactly that agent.
+    """
+    return slug(texto, 200) if texto else None
+
+
+def mesmo_item(a, b):
+    """Do two keys name the same item?
+
+    Equal, or one is a prefix of the other — an appended note extends the key, a
+    trimmed one shortens it. The 12-character floor keeps a one-word item from
+    matching everything that starts with it. Rewriting the *start* of the item
+    makes it a different item on purpose: replacing it by sub-items is what the
+    warning asks for, and it must reset the count.
+    """
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    curta, longa = (a, b) if len(a) <= len(b) else (b, a)
+    return len(curta) >= 12 and longa.startswith(curta)
+
+
+def limiar_aviso_item(maximo):
+    """The stop at which the warning to decompose starts. `None` = off.
+
+    40% of the lock threshold, floor 2: 15 → 6. The default pair comes from the
+    EOP INDEX (ADR-019): 94% of the items delivered there closed within 6 stops,
+    and only 2 of 126 ever reached 15.
+    """
+    if not maximo or maximo < 1:
+        return None
+    return max(2, round(maximo * 0.4))
+
+
 def achar_raiz(inicio, niveis=6):
     """Sobe a árvore procurando `.loop/`. Sem `.loop/` → None (hook é inerte)."""
     p = os.path.abspath(inicio or ".")
@@ -452,6 +499,48 @@ class Loop(object):
                 return self._texto_item(m.group(2))
         return None
 
+    def travar_item(self, chave, nota):
+        """Turn the head item `- [ ]` into `- 🔒`, with the reason on the line.
+
+        Only the FIRST pending line, and only if it is still the item `chave`
+        names: the hook decided to lock the head it just counted, and locking a
+        look-alike further down would hide work nobody asked to hide. Returns the
+        item text, or `None` when nothing was changed.
+
+        The file is read and written with `surrogateescape` and no newline
+        translation: the agent writes this file and a byte cut mid-character must
+        survive the round trip. `acrescentar_itens` reads with `replace` and gets
+        away with it because it only appends; this rewrites a line in place, and
+        a U+FFFD written back is data lost for good. The write goes through a
+        temporary file for the same reason `gravar` does.
+        """
+        caminho = self.p("QUEUE.md")
+        try:
+            with open(caminho, encoding="utf-8", errors="surrogateescape",
+                      newline="") as f:
+                linhas = f.read().split("\n")
+        except (IOError, OSError):
+            return None
+        for i, linha in enumerate(linhas):
+            m = self._PEND.match(linha)
+            if not m:
+                continue
+            texto = self._texto_item(m.group(2))
+            if not mesmo_item(chave_do_item(texto), chave):
+                return None            # the head moved under us: touch nothing
+            linhas[i] = "%s- 🔒 %s — %s%s" % (m.group(1), m.group(2), nota,
+                                              linha[m.end(2):])
+            tmp = caminho + ".tmp"
+            try:
+                with open(tmp, "w", encoding="utf-8", errors="surrogateescape",
+                          newline="") as f:
+                    f.write("\n".join(linhas))
+                os.replace(tmp, caminho)
+            except (IOError, OSError):
+                return None
+            return texto
+        return None
+
     def feito_contem(self, texto):
         """Algum item já marcado `- [x]` contém este texto? (marcador de escopo)"""
         if not texto:
@@ -540,6 +629,11 @@ class Loop(object):
             corpo.append("\n## Itens colhidos para a fila")
             for i in meta["colhidos"]:
                 corpo.append("- [ ] %s" % i)
+        if meta.get("travados"):
+            corpo.append("\n## Item travado pelo loop (ADR-019)")
+            for texto_item, paradas in meta["travados"]:
+                corpo.append("- 🔒 %s — %d paradas seguidas à frente da fila "
+                             "sem ser concluído" % (texto_item, paradas))
         corpo.append("\n## Mensagem original\n")
         corpo.append(texto.strip())
         corpo.append("")

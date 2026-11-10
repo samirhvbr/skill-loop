@@ -27,8 +27,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "li
 from diagnostico import (condicoes_de_fim,             # noqa: E402
                          portoes_de_inercia)
 from estado import (Loop, PADRAO, achar_raiz, agora,   # noqa: E402
-                    decorrido, dur, fora_da_janela, minutos_desde,
-                    objetivo_legivel, objetivo_para_exibir, parse_duracao,
+                    decorrido, dur, fora_da_janela, limiar_aviso_item,
+                    minutos_desde, objetivo_legivel, objetivo_para_exibir, parse_duracao,
                     tempo_de_producao)
 from sessoes import (JANELA_H as JANELA_SESSOES_H,     # noqa: E402
                      _idade as idade_de_sessao,
@@ -59,6 +59,17 @@ Fila vazia = o loop encerra. É o critério de pronto do ciclo inteiro.
 
 - [ ] (substitua por itens reais destilados da documentação)
 """
+
+
+
+def _teto_por_item(st):
+    """The per-item thresholds as the owner reads them (ADR-019)."""
+    maximo = st.get("max_paradas_item") or 0
+    if maximo < 1:
+        return "desligado"
+    return ("aviso na %dª parada · trava na %dª · %d item(ns) travado(s) nesta "
+            "rodada" % (limiar_aviso_item(maximo), maximo,
+                        st.get("itens_travados", 0)))
 
 
 def _sufixo_bloqueadas(loop):
@@ -289,6 +300,7 @@ def cmd_armar(args):
         bind_session=not args.qualquer_sessao,
         max_iteracoes=args.max,
         max_sem_progresso=args.max_sem_progresso,
+        max_paradas_item=args.max_paradas_item,
         politica_ask=args.politica,
         colher_itens=not args.sem_colheita,
         notificar=not args.sem_notificar,
@@ -309,6 +321,7 @@ def cmd_armar(args):
     print("  fim por    : %s" % _fim_por(st, pend))
     print("  teto       : %d iterações · %d paradas sem progresso"
           % (st["max_iteracoes"], st["max_sem_progresso"]))
+    print("  por item   : %s" % _teto_por_item(st))
     print("  política   : ASK=%s · colheita=%s · notificar=%s"
           % (st["politica_ask"], st["colher_itens"], st["notificar"]))
     print("  sessão     : %s" % (
@@ -369,6 +382,8 @@ def cmd_status(args):
     print("próximo    : %s" % (loop.proximo_item() or "—"))
     print("sem prog.  : %d / %d" % (st.get("sem_progresso", 0),
                                     st.get("max_sem_progresso", 0)))
+    print("neste item : %d parada(s) à frente · %s"
+          % (st.get("paradas_no_item", 0), _teto_por_item(st)))
     print("fim por    : %s" % _fim_por(st, pend))
     if st.get("escopo_itens"):
         print("escopo     : %d de %d item(ns) desta rodada"
@@ -520,6 +535,8 @@ def cmd_retomar(args):
     st["ativo"] = True
     st["fase"] = "rodando"
     st["sem_progresso"] = 0
+    st["item_cabeca"] = None
+    st["paradas_no_item"] = 0
     st["encerrado_por"] = None
     st["encerrado_detalhe"] = None
     st["encerrado_em"] = None
@@ -614,6 +631,11 @@ def main(argv=None):
     a.add_argument("--max", type=int, default=PADRAO["max_iteracoes"])
     a.add_argument("--max-sem-progresso", dest="max_sem_progresso", type=int,
                    default=PADRAO["max_sem_progresso"])
+    a.add_argument("--max-paradas-item", dest="max_paradas_item", type=int,
+                   default=PADRAO["max_paradas_item"], metavar="N",
+                   help="paradas seguidas com o mesmo item à frente da fila "
+                        "até o loop o travar (`- 🔒`); o aviso para decompor "
+                        "vem antes, a ~40%%. 0 desliga (ADR-019)")
     a.add_argument("--politica", default=PADRAO["politica_ask"],
                    choices=["continuar", "continuar-exceto-irreversivel", "parar"])
     a.add_argument("--sessao", default=None, help="session_id a que o loop se prende")

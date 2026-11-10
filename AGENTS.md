@@ -3,7 +3,7 @@
 > **Leia também:** [README_br.md](README_br.md) (o produto, canônico) ·
 > [SECURITY.md](SECURITY.md) (**leitura obrigatória** — modelo de ameaça) ·
 > [SPEC.md](SPEC.md) (pipeline normativo e formato do `.loop/`) ·
-> [docs/decisoes.md](docs/decisoes.md) (ADR-001 a ADR-018 + pendências) ·
+> [docs/decisoes.md](docs/decisoes.md) (ADR-001 a ADR-019 + pendências) ·
 > [prompts/continuacao.md](prompts/continuacao.md) (o prompt do produto) ·
 > [version.md](version.md) (versão + formato de commit).
 >
@@ -56,10 +56,10 @@ O que **existe e roda** (`0.1.0`, 16/08/2026):
 - `skill/loop/templates/loop.sh` — o atalho que `armar` semeia em
   `.loop/loop.sh` do repositório alvo: `./.loop/loop.sh [6h]` rearma e abre
   o painel, com a raiz derivada e sem sobrescrever a cópia do dono (ADR-016).
-- **306 testes**, controles verificados por mutação.
+- **324 testes**, controles verificados por mutação.
 
 ```bash
-python3 -m unittest discover -s tests -v      # 306 testes, sem modelo, sem rede
+python3 -m unittest discover -s tests -v      # 324 testes, sem modelo, sem rede
 ./install.sh --dry-run                        # mostra o que faria
 loop-watch --uma-vez --raiz <repo>            # uma leitura do acompanhamento
 ```
@@ -150,6 +150,12 @@ mensagens vagas.
     sobrescreve — a cópia é do dono, é onde as flags dele sobrevivem entre
     rodadas. Semeadura depois do estado gravado, e falhar nela nunca derruba
     o `armar` (ADR-016).
+16. **The stop count per item is a guard, not an end condition.** Past
+    `max_paradas_item` (15) the hook locks the head item (`- 🔒`, reason on the
+    line) and the round goes on; the warning to split it comes at 40% of that.
+    It answers *did the item close*, `sem_progresso` answers *did the agent
+    move* — keep both. The lock is reversible by hand and retakes the imprint
+    (ADR-019).
 
 E o que o LOOP **nunca** faz: agir sem `.loop/` armado, criar `.loop/` sozinho,
 apagar ou reescrever `ASSUMPTIONS.md`, escrever fora de `.loop/`, chamar rede ou

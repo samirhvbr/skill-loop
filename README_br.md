@@ -134,6 +134,7 @@ primeira parada. A janela cruza a meia-noite (`22:00-06:00`) e **falha aberta**:
 |---|---|---|
 | `.loop/STOP` (kill-switch) | — | `touch` de qualquer lugar, sem terminal na sessão |
 | Sem progresso | 3 paradas | árvore e fila idênticas = agente falando sem produzir |
+| Paradas por item | 15 (aviso na 6ª) | o mesmo item à frente da fila por 15 paradas vira `- 🔒` e a rodada segue; `--max-paradas-item N`, `0` desliga (ADR-019) |
 | Amarração à sessão | auto | outro chat no mesmo repo não é dirigido por este loop |
 | Política de ASK | `continuar` | decisão do Samir; `continuar-exceto-irreversivel` e `parar` disponíveis |
 

@@ -332,8 +332,11 @@ class TestRender(unittest.TestCase):
         self.assertEqual([m for m, _r, _t, _x in linhas if m],
                          ["kill-switch", "teto de iterações", "sem progresso",
                           "escopo esgotado", "fora da janela de trabalho"])
+        # Informative rows, motivo `None`: the queue and, since ADR-019, the stop
+        # count on the head item — the lock sends ONE item to the owner and the
+        # round goes on, so it is not a way for the round to end.
         self.assertEqual([r for m, r, _t, _x in linhas if m is None],
-                         ["fila (não encerra)"])
+                         ["fila (não encerra)", "neste item"])
 
     def test_ordem_do_bloco_sem_relogio_e_a_mesma(self):
         # There is no "round by items" branch any more (ADR-017): with or without
@@ -345,8 +348,11 @@ class TestRender(unittest.TestCase):
         self.assertEqual([m for m, _r, _t, _x in linhas if m],
                          ["kill-switch", "teto de iterações", "sem progresso",
                           "escopo esgotado"])
+        # Informative rows, motivo `None`: the queue and, since ADR-019, the stop
+        # count on the head item — the lock sends ONE item to the owner and the
+        # round goes on, so it is not a way for the round to end.
         self.assertEqual([r for m, r, _t, _x in linhas if m is None],
-                         ["fila (não encerra)"])
+                         ["fila (não encerra)", "neste item"])
 
     def test_motivo_sem_linha_propria_ainda_aparece(self):
         # `política ASK=parar` depende de classificar a mensagem, então o painel

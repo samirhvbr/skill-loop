@@ -304,6 +304,46 @@ quando o reabastecimento precisa de instrução mais específica que a do templa
 
 ---
 
+### 5.3 Stops per item (ADR-019)
+
+Not an end condition — it never ends a round. It answers *did the item close?*,
+where `sem_progresso` answers *did the agent move?*, and an agent can do the
+second all day without the first.
+
+At every stop, after the harvest and before the chain of §5, the hook compares the
+head item (`proximo_item()`) with `item_cabeca`:
+
+| State field | Default | Meaning |
+|---|---|---|
+| `item_cabeca` | `null` | normalised key of the head item at the last stop |
+| `paradas_no_item` | `0` | consecutive stops with that item at the head |
+| `max_paradas_item` | `15` | the lock; `0` switches the whole guard off |
+| `itens_travados` | `0` | items the loop locked in this round |
+
+**Identity** is `chave_do_item` — a normalised prefix of up to 200 characters, not
+a hash. Two keys name the same item when they are equal or one is a prefix of the
+other (`mesmo_item`, 12-character floor), so a progress note appended by the agent
+does not make a new item and rewriting the start of the line does.
+
+| Count | What the hook does |
+|---|---|
+| `< aviso` | nothing |
+| `≥ aviso` (`limiar_aviso_item`: 40% of the lock, floor 2 — 6 by default) | `{bloco_item}` in the `reason` asks the agent to close the item, split it into smaller `- [ ]`, or lock it |
+| `≥ max_paradas_item` | `travar_item`: `- [ ]` → `- 🔒`, reason appended on the same line; the round continues with the next item |
+
+After a lock: the counts and the head are re-read, the **imprint is retaken** (the
+lock changes `pend` and must not read as progress at the next stop), the new head
+starts at `paradas_no_item = 1`, the entry gets a `## Item travado pelo loop`
+section and the `INDEX.md` decision reads `continuou · item 🔒`. The lock is
+reversible by hand — editing the line back is the undo.
+
+`travar_item` touches only the **first** pending line and only if it is still the
+item that was counted; it reads and writes with `surrogateescape`, through a
+temporary file. Any failure degrades to doing nothing (ADR-009). `retomar` resets
+`item_cabeca` and `paradas_no_item`; `armar --max-paradas-item N` sets the lock.
+
+---
+
 ## 6. `.loop/` — o estado
 
 ```

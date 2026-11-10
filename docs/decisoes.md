@@ -691,6 +691,109 @@ ADR. Decisão nova entra aqui, com data e status, no mesmo commit da mudança.
 
 ---
 
+## ADR-019 — A stop count per item: the lock for an agent that moves and never closes
+
+- **Date:** 2026-11-10 · **Status:** Accepted · **Extends:** ADR-018 (the third
+  box). Complements — does not replace — the no-progress brake of ADR-010/`0.4.3`.
+- **Where it came from.** A review of `cobusgreyling/loop-engineering` (MIT, a
+  pattern library for scheduled agent loops). Its `loop-context` circuit breaker
+  caps attempts *per item* ("max 3 fix attempts per item; escalate after"), and
+  its CI-sweeper story records what the lack of that cap costs: 14 consecutive
+  attempts on one failure, 1.8M tokens, three hours, until the breaker tripped.
+- **The gap, verified in our code.** `sem_progresso` compares a fingerprint —
+  `git status --porcelain` outside `.loop/`, `HEAD`, and the queue counts — so it
+  answers *did the agent move?* An agent that commits at every stop and never
+  ticks the item at the head moves all day: the fingerprint changes each stop and
+  the brake never fires. And `proximo_item()` is stateless; nothing counted how
+  many times the same item came back. ADR-018 asks the **agent** to lock an item
+  it cannot do (clause 5 of the prompt) — an agent that does not is not caught by
+  anything.
+- **Measured, before choosing a number.** The EOP `INDEX.md`: 516 stops, 126
+  distinct items delivered. Consecutive stops with the same item at the head:
+
+  | Stops on the item | 1 | 2 | 3 | 4–5 | 6–7 | 8–9 | 13–14 | ≥15 |
+  |---|---|---|---|---|---|---|---|---|
+  | Items | 88 | 16 | 5 | 7 | 4 | 2 | 2 | 2 |
+
+  70% of the items closed in one stop and 94% within six. The tail is two kinds of
+  thing: owner boxes (`L781`, 34 stops, the incident behind ADR-018; `L446`, 13;
+  `L544`, 9; `L520`, 8) and large items (`L680`, 29, labelled *grande*; `L608`, 14
+  — *blocos 2..9* of one item, which was progressing).
+  **Limits, stated:** one project, rounds from several versions of the code, the
+  `INDEX` truncates the item at 70 characters, only *consecutive* stops are
+  counted — and the data cannot separate a large item that is progressing from
+  one that is stuck. That last limit is why the guard has two steps.
+- **Decision.** The hook counts, at every stop, the consecutive stops at which the
+  same item was at the head (`paradas_no_item`, with `item_cabeca` as its
+  identity). Two thresholds:
+  1. **Warning at `limiar_aviso_item(max)` — 40%, default 6.** The `reason` gains
+     a block (`{bloco_item}` in `prompts/continuacao.md`) asking the agent to pick:
+     close it now, **split** it into smaller `- [ ]` items with a recognisable
+     end, or lock it. Splitting rewrites the head and resets the count, which is
+     the point: an item that takes six stops is not *executable alone* and
+     *verifiable*, the two things `SKILL.md` asks of every item.
+  2. **Lock at `max_paradas_item` — default 15.** The hook rewrites the head line
+     from `- [ ]` to `- 🔒`, appends the reason on the same line (`travado pelo
+     loop após N paradas sem concluir (ADR-019, #NNNN)`), and the round goes on
+     with the next item. The prompt of that stop says what happened. The entry
+     gets a section, the `INDEX.md` decision reads `continuou · item 🔒`.
+  `armar --max-paradas-item N` sets it; **`0` switches both off**. `status`,
+  `armar` and the panel show the count; the panel row is informative (motivo
+  `None`) — the lock is not an end condition and ends nothing.
+- **What the numbers would have done.** The warning, at 6, reaches 10 of the 126
+  items (8%). The lock, at 15, reaches 2 (1.6%): `L781`, which was the owner box,
+  and `L680`.
+- **Details that are decisions.**
+  - *Identity is a normalised prefix, not a hash.* The agent writes progress notes
+    on the line it is working; a hash would call every note a new item and
+    switch the guard off for exactly the agent it exists to catch. Two keys are
+    the same item when equal or when one is a prefix of the other, with a 12-
+    character floor. Rewriting the *start* of the item is a new item — on purpose.
+  - *The lock is reversible.* One line, `- 🔒` back to `- [ ]`, and the owner's
+    edit is the undo. A lock that could not be undone would make this an end
+    condition in disguise.
+  - *Locking is not progress.* It changes `pend`, which is part of the
+    fingerprint; the hook retakes the imprint after locking, or the **next** stop
+    would read the change as movement and reset `sem_progresso` — the loop
+    crediting itself for its own bookkeeping, the shape of the `0.4.3` defect.
+  - *The head is checked again before writing,* and a failure to read or write
+    the queue degrades to doing nothing. The file is read and written with
+    `surrogateescape`: the agent writes it, and a byte cut mid-character must
+    survive the round trip (`acrescentar_itens` reads with `replace` and can
+    afford it because it only appends; this rewrites a line in place).
+  - *The new head starts counting at 1,* because it is the head at the stop that
+    locked its predecessor.
+- **Alternatives rejected.** *A single hard cut at a low number* — it would have
+  cut `L608`-shaped items, the large ones that are making progress, and the data
+  has no way to tell them apart before the cut. *Ending the round when an item
+  hits the ceiling* — ADR-017's lesson: an end condition must be a fact about the
+  work the round cannot go on without; one stuck item is a fact about one item.
+  *Counting only stops whose fingerprint did not change* — that is
+  `sem_progresso`, and it is exactly what this must not depend on. *Asking the
+  agent to count* — that is ADR-018's clause 5, which this exists to back up.
+- **Consequences.**
+  - `STATE.json` gains four fields, all additive and merged from defaults on read.
+    **A `.loop/` armed before `0.5.7` picks up the default ceiling of 15** the
+    next time it runs; there is no round to protect from that today (the three
+    `ativo` ones on this machine last stopped 7 to 54 days ago).
+  - The hook now writes `QUEUE.md` in one more place. The precedent is the
+    harvest, which appends; this rewrites one line, under the rules above.
+  - Two panel tests that enumerated the informative rows were updated to list the
+    new one; the assertion that matters — the order of the rows *with* a motive,
+    the chain — is untouched.
+- **Open (P-10).** 6 and 15 are read off a single project. They are a first
+  calibration, not a measurement of how long an item should take.
+- **Mutation.** 17 controls switched off, one at a time, each dropping at least
+  one test: the lock (3), the warning (1), the imprint retaken after a lock (1),
+  identity as strict equality (2), the 12-character floor (1), `0` not switching
+  the guard off (1), `surrogateescape` replaced by `replace` (1), the re-check of
+  the head (1), the count not resetting on a new item (2), the prompt placeholder
+  (1), `retomar` keeping the count (1), `armar` dropping the flag (2), the
+  `INDEX` marker (1), the entry section (1), the new head not starting at 1 (1),
+  the default ceiling (3), the reason written on the locked line (2).
+
+---
+
 ## Pendências
 
 | # | Pendência | Estado |
@@ -704,3 +807,4 @@ ADR. Decisão nova entra aqui, com data e status, no mesmo commit da mudança.
 | P-07 | O teto de 3 s da espera pelo fecho (ADR-012) é **escolha, não medição**. Falta medir quanto o fecho realmente demora a chegar, e em que tamanho de sessão a espera estoura. | aberta |
 | P-08 | **Rodada órfã: turno que morre sem emitir `Stop`.** O único gatilho é o hook, e `condicoes_de_fim` só é avaliada dentro dele — então erro de API a meio da resposta, crash ou queda de rede deixam a rodada pendurada em `ativo: true` e **nenhuma condição de fim pode encerrá-la**, nem o relógio, porque ele só é consultado numa parada que não vai acontecer. O painel mostra `relógio esgotado` e o loop segue "ativo"; `--ate-encerrar` nunca sai. Observado em 17/08 (`API Error: Server error mid-response` no EOP, às ~13:33). Não é o fail-open falhando — é o gatilho nunca disparando. Saídas a avaliar: `loop-watch` declarar a rodada órfã quando o relógio estoura sem parada nova; ou o rearme por cron da F3 varrer estado vencido. | aberta |
 | P-09 | **O auto-bind do ADR-008 adota sessão que NÃO armou o loop — contraexemplo medido em 01–02/09.** A decisão diz, com estas palavras, que a primeira parada *"é **necessariamente** a da sessão que armou"*, e o comentário em `hooks/loop-stop.py:167` repete a afirmação. **Não é necessariamente.** É a primeira sessão que terminar um turno naquele repositório — e no EOP foi uma sessão que o dono havia aberto para outra coisa (triagem dos PRs do Dependabot), enquanto o `loop.sh` armava de outra. Custo medido nessa rodada: **18 entradas** de diário (`0153`–`0160`, `0166`–`0172`) que são mensagens sobre PRs e sobre um artifact, arquivadas sob os itens `L191`, `L201`, `L219` e `L220`, com que nada têm a ver; **4 itens espúrios** enfileirados a partir de fragmentos truncados da mensagem (`- [ ] a página como fonte`), que é a **terceira** reincidência da família da emenda do ADR-005; e — o mais caro — **duas sessões dirigidas contra a mesma árvore de trabalho**, que no EOP produziu duas colisões de `version.md` (`1.76.71` e `1.76.72`, a segunda no próprio commit que consertava a primeira), duas `master` vermelhas na guarda `G2` e dois commits que anunciaram trabalho que o diff não continha. ⚠️ **O conserto não foi feito, e a razão é a norma desta casa:** mexer em `hooks/` ou `lib/` com rodada viva faz o hook sair fail-open e trava a rodada no meio — foi o motivo escrito no `0.2.4` para o conserto do `INDEX.md` ter ficado para depois — e a rodada do EOP estava rodando enquanto isto era escrito, com **outra** sessão executando o `L219`. ✅ **A PRIMEIRA saída foi entregue em 02/09 (`0.2.6`), e ela era a única fora do caminho do hook:** o `armar` vive em `loop_ctl.py`, que o `hooks/loop-stop.py` **não importa** — ele importa só `classificador`, `diagnostico`, `estado` e `transcricao` de `lib/`. Logo a guarda de porta podia entrar **com a rodada viva**, e entrou; as outras duas seguem barradas pela mesma norma. E ela não é a *falha ruidosa* pura que esta linha propunha: recusar sem saída quebraria o `loop.sh` do EOP (`loop-ctl armar --raiz ~/x/EOP --duracao 10h`, sem `--sessao`) e viraria `--force` na semana seguinte — nasceu o `--adotar-primeira-parada`, que mantém o comportamento alcançável e o obriga a ser dito. Saídas restantes, as duas em `hooks/`/`lib/`: gravar no ato do `armar` um marcador barato do processo que armou (PID/tty) e o hook conferir antes de adotar, caindo no comportamento antigo quando o campo estiver ausente, para não quebrar rodada em curso; e um lock de árvore em `.loop/` que faça a segunda sessão **recusar** item em vez de competir. | **aberta** |
+| P-10 | **Calibrar 6 e 15 (ADR-019) em rodadas reais.** Os dois números saíram de um único projeto (EOP, 126 itens). Falta medir em outros repositórios e separar item grande que avança de item travado — o que o `INDEX.md` não permite hoje. | aberta |

@@ -136,7 +136,10 @@ a malformed `--janela` never stops work silently.
 
 Other guards: `.loop/STOP` kill-switch (a `touch` from anywhere, no terminal
 needed), a degenerate-loop detector (identical worktree fingerprint + queue for
-3 stops means the agent is talking without producing), and session binding.
+3 stops means the agent is talking without producing), a **stop count per item**
+(an item that stays at the head of the queue for 15 stops is locked as `- 🔒` and
+the round goes on, after a warning to split it at stop 6 — `--max-paradas-item`,
+ADR-019), and session binding.
 
 **Fail-open by design:** any error in the hook → `exit 0`. The worst case
 degrades to today's behaviour (you type "continue"), never to a stuck session.
